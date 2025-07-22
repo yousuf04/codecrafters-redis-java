@@ -23,14 +23,18 @@ public class Main {
             clientSocket = serverSocket.accept();
             InputStream inputStream = clientSocket.getInputStream();
             OutputStream outputStream = clientSocket.getOutputStream();
+            int count =0;
             while(true){
-                int ans = inputStream.read();
-                while(ans!=10) {
-                    ans= inputStream.read();
+                int b = inputStream.read();
+                if (b == -1) break;
+
+                if (b == '\n') {
+                    count++;
+                    if (count == 3) { // after "*1", "$4", "PING"
+                        outputStream.write("+PONG\r\n".getBytes());
+                        count = 0; // reset for next command
+                    }
                 }
-                if(ans==-1)
-                    break;
-                outputStream.write("+PONG\r\n".getBytes());
             }
             } catch (IOException e) {
                 System.out.println("IOException: " + e.getMessage());
