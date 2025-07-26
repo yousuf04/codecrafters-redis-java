@@ -2,6 +2,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.Socket;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
@@ -9,7 +10,25 @@ import java.util.Map;
 public class ClientHandler implements Runnable{
 
     Socket clientSocket;
-    Map<String,String> keyValueMap;
+    Map<String, ExpiryKey> keyValueMap;
+
+    private class ExpiryKey {
+
+        String value;
+        Long expiryTime;
+
+        public ExpiryKey(String value, long expiryTime) {
+            this.value = value;
+            this.expiryTime = expiryTime;
+        }
+
+        public String getValue() {
+            return value;
+        }
+        public Long getExpiryTime() {
+            return expiryTime;
+        }
+    }
 
     public ClientHandler(Socket clientSocket) {
         this.clientSocket=clientSocket;
@@ -62,13 +81,28 @@ public class ClientHandler implements Runnable{
             else if("SET".equalsIgnoreCase(command)) {
                 String key = arguments.get(1);
                 String value = arguments.get(2);
-                keyValueMap.put(key, value);
+                long currentTime = Instant.now().toEpochMilli();
+                Long expiryTime = getExpiryTime(currentTime, arguments);
+                keyValueMap.put(key, new ExpiryKey(value, expiryTime));
+                System.out.println("Key : "+key+" set with the value: "+value+" and expiry time: "+expiryTime);
                 return "+OK\r\n";
             }
             else if("GET".equalsIgnoreCase(command)) {
-                String value = keyValueMap.get(arguments.get(1));
-                if(value==null)
+                String key = arguments.get(1);
+                ExpiryKey expiryKey = keyValueMap.get(key);
+                if(expiryKey == null) {
                     return nullRespString;
+                }
+                String value = expiryKey.getValue();
+                long currentTime = Instant.now().toEpochMilli();
+
+                Long expiryTime = expiryKey.getExpiryTime();
+                System.out.println("The value of key : "+key+" is : "+value+", and the expiry time is: "+expiryTime);
+                System.out.println("Time when accessing key : "+key+ " is : " + currentTime);
+                if(expiryTime!=-1 && currentTime>expiryTime) {
+                    keyValueMap.remove(key);
+                    return nullRespString;
+                }
                 return encodeBulkString(value);
             }
             else {
@@ -77,6 +111,27 @@ public class ClientHandler implements Runnable{
 
         }
         return "";
+    }
+
+    private Long getExpiryTime(long currentTime, ArrayList<String> arguments) {
+        long expiryTime = currentTime;
+        if(arguments.size()>3) {
+            String timeType = arguments.get(3);
+            long time = Long.parseLong(arguments.get(4));
+            if("EX".equalsIgnoreCase(timeType)) {
+                expiryTime+=time*1000;
+            }
+            else if("PX".equalsIgnoreCase(timeType)) {
+                expiryTime += time;
+            }
+            else {
+                expiryTime = -1;
+            }
+        }
+        else {
+            expiryTime = -1;
+        }
+        return expiryTime;
     }
 
     public void run() {
