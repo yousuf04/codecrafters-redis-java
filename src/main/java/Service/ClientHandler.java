@@ -167,7 +167,7 @@ public class ClientHandler implements Runnable{
             list.addLast(value);
             keyValueMap.put(key, new ExpiryKey(list, -1));
             return outputEncoderService.encodeInteger(1);
-        } else if (keyValueMap.get(key) instanceof List) {
+        } else if (keyValueMap.get(key).getValue() instanceof List<?>) {
             @SuppressWarnings("unchecked")
             List<String> list = (List<String>) keyValueMap.get(key).getValue();
             list.addLast(value);
