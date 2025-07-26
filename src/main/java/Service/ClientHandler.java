@@ -102,6 +102,10 @@ public class ClientHandler implements Runnable{
                 }
                 return outputEncoderService.encodeInteger(sizeOfList(key));
             }
+            else if("LLEN".equalsIgnoreCase(command)) {
+                String key = arguments.get(1);
+                return outputEncoderService.encodeInteger(sizeOfList(key));
+            }
             else {
                 throw new RuntimeException("Command not found");
             }
