@@ -115,6 +115,7 @@ public class ClientHandler implements Runnable{
                 List<String> elements = new LinkedList<>();
                 for(int i=0; i<Math.min(len, sizeOfList(key)); i++) {
                     String element = removeElementFromLeft(key);
+                    elements.addLast(element);
                 }
                 return outputEncoderService.encodeList(elements);
             }
