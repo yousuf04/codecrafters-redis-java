@@ -1,6 +1,4 @@
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 
@@ -17,6 +15,7 @@ public class Main {
                 clientSocket = serverSocket.accept();
                 ClientHandler clientHandler = new ClientHandler(clientSocket);
                 Thread t = new Thread(clientHandler);
+                System.out.println("Accepted client connection with the socket : "+clientSocket.getPort()+" on the thread: "+t.getName());
                 t.start();
             }
         } catch (IOException e) {
