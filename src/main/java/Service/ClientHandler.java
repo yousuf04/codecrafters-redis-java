@@ -109,9 +109,10 @@ public class ClientHandler implements Runnable{
             else if("LPOP".equalsIgnoreCase(command)) {
                 String key = arguments.get(1);
                 int len = 1;
-                if(arguments.size()==3) {
-                    len = Integer.parseInt(arguments.get(2));
+                if(arguments.size()<3) {
+                   return outputEncoderService.encodeBulkString(removeElementFromLeft(key));
                 }
+                len = Integer.parseInt(arguments.get(2));
                 List<String> elements = new LinkedList<>();
                 for(int i=0; i<Math.min(len, sizeOfList(key)); i++) {
                     String element = removeElementFromLeft(key);
