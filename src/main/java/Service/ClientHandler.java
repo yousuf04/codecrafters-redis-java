@@ -106,6 +106,11 @@ public class ClientHandler implements Runnable{
                 String key = arguments.get(1);
                 return outputEncoderService.encodeInteger(sizeOfList(key));
             }
+            else if("LPOP".equalsIgnoreCase(command)) {
+                String key = arguments.get(3);
+                String element = removeElementFromLeft(key);
+                return outputEncoderService.encodeBulkString(element);
+            }
             else {
                 throw new RuntimeException("Command not found");
             }
@@ -207,6 +212,21 @@ public class ClientHandler implements Runnable{
             @SuppressWarnings("unchecked")
             List<String> list = (List<String>) keyValueMap.get(key).getValue();
             list.addFirst(value);
+        } else {
+            throw new IllegalArgumentException("Value at key is not a List<String>");
+        }
+    }
+
+    public String removeElementFromLeft(String key) {
+        if (keyValueMap.get(key) == null) {
+            return nullRespString;
+        } else if (keyValueMap.get(key).getValue() instanceof List<?>) {
+            @SuppressWarnings("unchecked")
+            List<String> list = (List<String>) keyValueMap.get(key).getValue();
+            if(list.isEmpty()) {
+                return nullRespString;
+            }
+            return list.removeFirst();
         } else {
             throw new IllegalArgumentException("Value at key is not a List<String>");
         }
