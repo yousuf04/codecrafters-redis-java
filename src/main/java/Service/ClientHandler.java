@@ -9,11 +9,21 @@ import java.net.Socket;
 import java.time.Instant;
 import java.util.*;
 
+import static java.lang.Integer.min;
+
 public class ClientHandler implements Runnable{
 
     Socket clientSocket;
     Map<String, ExpiryKey> keyValueMap;
     OutputEncoderService outputEncoderService = new OutputEncoderService();
+
+    public ClientHandler(Socket clientSocket) {
+        this.clientSocket=clientSocket;
+        this.keyValueMap = new HashMap<>();
+    }
+
+    private static final String nullRespString = "$-1\r\n";
+    private static final String nullRespArray = "*0\r\n";
 
     public void run() {
         try (
@@ -43,13 +53,6 @@ public class ClientHandler implements Runnable{
             }
         }
     }
-
-    public ClientHandler(Socket clientSocket) {
-        this.clientSocket=clientSocket;
-        this.keyValueMap = new HashMap<>();
-    }
-
-    private static final String nullRespString = "$-1\r\n";
 
     private String respond(byte[] input) {
         if(input[0]=='*')
@@ -86,6 +89,12 @@ public class ClientHandler implements Runnable{
                     appendRightToList(key,value);
                 }
                 return outputEncoderService.encodeInteger(sizeOfList(key));
+            }
+            else if("LRANGE".equalsIgnoreCase(command)) {
+                String key = arguments.get(1);
+                Integer startIndex = Integer.parseInt(arguments.get(2));
+                Integer endIndex = Integer.parseInt(arguments.get(3));
+                return listElementsInRange(key, startIndex, endIndex);
             }
             else {
                 throw new RuntimeException("Command not found");
@@ -186,6 +195,29 @@ public class ClientHandler implements Runnable{
             @SuppressWarnings("unchecked")
             List<String> list = (List<String>) keyValueMap.get(key).getValue();
             return list.size();
+        } else {
+            throw new IllegalArgumentException("Value at key is not a List<String>");
+        }
+    }
+
+    public String listElementsInRange(String key, Integer startIndex, Integer endIndex) {
+        if (keyValueMap.get(key) == null) {
+            return nullRespArray;
+        } else if (keyValueMap.get(key).getValue() instanceof List<?>) {
+            @SuppressWarnings("unchecked")
+            List<String> list = (List<String>) keyValueMap.get(key).getValue();
+            Integer len = list.size();
+            if(startIndex >= len) {
+                return nullRespArray;
+            }
+            else if(startIndex>endIndex) {
+                return nullRespArray;
+            }
+            List<String> elements = new LinkedList<>();
+            for(int i = startIndex; i <= min(len, endIndex); i++) {
+                elements.addLast(list.get(i));
+            }
+            return outputEncoderService.encodeList(elements);
         } else {
             throw new IllegalArgumentException("Value at key is not a List<String>");
         }
