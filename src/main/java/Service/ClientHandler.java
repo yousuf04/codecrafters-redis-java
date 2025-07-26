@@ -204,14 +204,18 @@ public class ClientHandler implements Runnable{
         } else if (keyValueMap.get(key).getValue() instanceof List<?>) {
             @SuppressWarnings("unchecked")
             List<String> list = (List<String>) keyValueMap.get(key).getValue();
-            Integer len =list.size();
+            int len =list.size();
+            if(startIndex<0)
+                startIndex+=len;
+            if(endIndex<0)
+                endIndex+=len;
             if(startIndex >= len) {
                 return nullRespArray;
             }
             else if(startIndex>endIndex) {
                 return nullRespArray;
             }
-            List<String> subList = list.subList(startIndex, Math.min(len, endIndex+1));
+            List<String> subList = list.subList(Math.max(0,startIndex), Math.max(0,Math.min(len, endIndex+1)));
             return outputEncoderService.encodeList(subList);
         } else {
             throw new IllegalArgumentException("Value at key is not a List<String>");
