@@ -9,8 +9,6 @@ import java.net.Socket;
 import java.time.Instant;
 import java.util.*;
 
-import static java.lang.Integer.min;
-
 public class ClientHandler implements Runnable{
 
     Socket clientSocket;
@@ -85,7 +83,7 @@ public class ClientHandler implements Runnable{
             else if("RPUSH".equalsIgnoreCase(command)) {
                 String key = arguments.get(1);
                 for(int i=2;i<arguments.size();i++) {
-                    String value = arguments.get(2);
+                    String value = arguments.get(i);
                     appendRightToList(key,value);
                 }
                 return outputEncoderService.encodeInteger(sizeOfList(key));
@@ -206,18 +204,15 @@ public class ClientHandler implements Runnable{
         } else if (keyValueMap.get(key).getValue() instanceof List<?>) {
             @SuppressWarnings("unchecked")
             List<String> list = (List<String>) keyValueMap.get(key).getValue();
-            Integer len = list.size();
+            Integer len =list.size();
             if(startIndex >= len) {
                 return nullRespArray;
             }
             else if(startIndex>endIndex) {
                 return nullRespArray;
             }
-            List<String> elements = new LinkedList<>();
-            for(int i = startIndex; i <= min(len, endIndex); i++) {
-                elements.addLast(list.get(i));
-            }
-            return outputEncoderService.encodeList(elements);
+            List<String> subList = list.subList(startIndex, Math.min(len, endIndex+1));
+            return outputEncoderService.encodeList(subList);
         } else {
             throw new IllegalArgumentException("Value at key is not a List<String>");
         }
