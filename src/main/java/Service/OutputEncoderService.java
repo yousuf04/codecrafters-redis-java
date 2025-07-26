@@ -1,0 +1,42 @@
+package Service;
+
+import java.util.LinkedList;
+
+public class OutputEncoderService {
+
+    @SuppressWarnings("unchecked")
+    public String encodeObject(Object input) {
+        if(input instanceof String) {
+            return encodeBulkString((String)input);
+        }
+        if(input instanceof Integer) {
+            return encodeInteger((Integer) input);
+        }
+        if(input instanceof LinkedList<?>) {
+            return encodeLinkedList((LinkedList<String>) input);
+        }
+        else {
+            throw new RuntimeException("Unknown data type found");
+        }
+    }
+
+    public String encodeBulkString(String input) {
+        return "$" + input.length() + "\r\n" + input + "\r\n";
+    }
+
+    public String encodeSimpleString(String input) {
+        return "+" + input + "\r\n";
+    }
+
+    public String encodeInteger(Integer number) {
+        return ":"+number.toString()+"\r\n";
+    }
+
+    public String encodeLinkedList(LinkedList<String> list) {
+        StringBuilder ans = new StringBuilder("*" + list.size());
+        for (String s : list) {
+            ans.append(encodeBulkString(s));
+        }
+        return ans.toString();
+    }
+}
