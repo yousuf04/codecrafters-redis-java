@@ -107,7 +107,7 @@ public class ClientHandler implements Runnable{
                 return outputEncoderService.encodeInteger(sizeOfList(key));
             }
             else if("LPOP".equalsIgnoreCase(command)) {
-                String key = arguments.get(3);
+                String key = arguments.get(1);
                 String element = removeElementFromLeft(key);
                 return outputEncoderService.encodeBulkString(element);
             }
