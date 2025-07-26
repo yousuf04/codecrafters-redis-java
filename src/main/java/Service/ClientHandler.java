@@ -81,8 +81,11 @@ public class ClientHandler implements Runnable{
             }
             else if("RPUSH".equalsIgnoreCase(command)) {
                 String key = arguments.get(1);
-                String value = arguments.get(2);
-                return appendRightToList(key,value);
+                for(int i=2;i<arguments.size();i++) {
+                    String value = arguments.get(2);
+                    appendRightToList(key,value);
+                }
+                return outputEncoderService.encodeInteger(sizeOfList(key));
             }
             else {
                 throw new RuntimeException("Command not found");
@@ -160,18 +163,29 @@ public class ClientHandler implements Runnable{
         return outputEncoderService.encodeObject(value);
     }
 
-    public String appendRightToList(String key, String value) {
+    public void appendRightToList(String key, String value) {
 
         if (keyValueMap.get(key) == null) {
             List<String> list = new LinkedList<>();
             list.addLast(value);
             keyValueMap.put(key, new ExpiryKey(list, -1));
-            return outputEncoderService.encodeInteger(1);
         } else if (keyValueMap.get(key).getValue() instanceof List<?>) {
             @SuppressWarnings("unchecked")
             List<String> list = (List<String>) keyValueMap.get(key).getValue();
             list.addLast(value);
-            return outputEncoderService.encodeInteger(list.size());
+        } else {
+            throw new IllegalArgumentException("Value at key is not a List<String>");
+        }
+    }
+
+    public Integer sizeOfList(String key) {
+        if(keyValueMap.get(key) == null) {
+            throw new RuntimeException("Key does not exist in the map");
+        }
+        if (keyValueMap.get(key).getValue() instanceof List<?>) {
+            @SuppressWarnings("unchecked")
+            List<String> list = (List<String>) keyValueMap.get(key).getValue();
+            return list.size();
         } else {
             throw new IllegalArgumentException("Value at key is not a List<String>");
         }
