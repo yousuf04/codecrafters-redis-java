@@ -214,7 +214,7 @@ public class ClientHandler implements Runnable{
 
     public Integer sizeOfList(String key) {
         if(keyValueMap.get(key) == null) {
-            throw new RuntimeException("Key does not exist in the map");
+            return 0;
         }
         if (keyValueMap.get(key).getValue() instanceof List<?>) {
             @SuppressWarnings("unchecked")
