@@ -94,6 +94,14 @@ public class ClientHandler implements Runnable{
                 Integer endIndex = Integer.parseInt(arguments.get(3));
                 return listElementsInRange(key, startIndex, endIndex);
             }
+            else if("LPUSH".equalsIgnoreCase(command)) {
+                String key = arguments.get(1);
+                for(int i=2;i<arguments.size();i++) {
+                    String value = arguments.get(i);
+                    appendLeftToList(key,value);
+                }
+                return outputEncoderService.encodeInteger(sizeOfList(key));
+            }
             else {
                 throw new RuntimeException("Command not found");
             }
@@ -180,6 +188,21 @@ public class ClientHandler implements Runnable{
             @SuppressWarnings("unchecked")
             List<String> list = (List<String>) keyValueMap.get(key).getValue();
             list.addLast(value);
+        } else {
+            throw new IllegalArgumentException("Value at key is not a List<String>");
+        }
+    }
+
+    public void appendLeftToList(String key, String value) {
+
+        if (keyValueMap.get(key) == null) {
+            List<String> list = new LinkedList<>();
+            list.addFirst(value);
+            keyValueMap.put(key, new ExpiryKey(list, -1));
+        } else if (keyValueMap.get(key).getValue() instanceof List<?>) {
+            @SuppressWarnings("unchecked")
+            List<String> list = (List<String>) keyValueMap.get(key).getValue();
+            list.addFirst(value);
         } else {
             throw new IllegalArgumentException("Value at key is not a List<String>");
         }
