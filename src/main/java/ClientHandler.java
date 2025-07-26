@@ -3,16 +3,26 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.Socket;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
 
 public class ClientHandler implements Runnable{
 
     Socket clientSocket;
+    Map<String,String> keyValueMap;
 
     public ClientHandler(Socket clientSocket) {
         this.clientSocket=clientSocket;
+        this.keyValueMap = new HashMap<>();
     }
 
-    String respond(byte[] input) {
+    private static final String nullRespString = "$-1\r\n";
+
+    private String encodeBulkString(String input) {
+        return "$" + input.length() + "\r\n" + input + "\r\n";
+    }
+
+    private String respond(byte[] input) {
         if(input[0]=='*')
         {
             int in =1;
@@ -41,18 +51,30 @@ public class ClientHandler implements Runnable{
                 System.out.println("Argument "+i+" : "+argument);
                 arguments.add(argument.toString());
             }
-            if("PING".equalsIgnoreCase(arguments.get(0))) {
+            String command = arguments.get(0);
+            if("PING".equalsIgnoreCase(command)) {
                 return "+PONG\r\n";
             }
-            else {
-                return "$" +
-                        arguments.get(1).length() +
-                        '\r' +
-                        '\n' +
-                        arguments.get(1) +
-                        '\r' +
-                        '\n';
+            else if("ECHO".equalsIgnoreCase(command)) {
+                String echoString = arguments.get(1);
+                return encodeBulkString(echoString);
             }
+            else if("SET".equalsIgnoreCase(command)) {
+                String key = arguments.get(1);
+                String value = arguments.get(2);
+                keyValueMap.put(key, value);
+                return "+OK\r\n";
+            }
+            else if("GET".equalsIgnoreCase(command)) {
+                String value = keyValueMap.get(arguments.get(1));
+                if(value==null)
+                    return nullRespString;
+                return encodeBulkString(value);
+            }
+            else {
+                throw new RuntimeException("Command not found");
+            }
+
         }
         return "";
     }
