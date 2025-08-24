@@ -117,6 +117,9 @@ public class ClientHandler implements Runnable {
                 String key = arguments.get(1);
                 Double timeout = Double.parseDouble(arguments.get(2));
                 return removeBlockedElementFromLeft(key, timeout);
+            } else if ("TYPE".equalsIgnoreCase(command)) {
+                String key = arguments.get(1);
+                return getType(key);
             } else {
                 throw new RuntimeException("Command not found");
             }
@@ -157,7 +160,7 @@ public class ClientHandler implements Runnable {
     private String setValue(String key, String value, String timeUnit, Long time) {
         long expiryTime = Instant.now().toEpochMilli();
         if (timeUnit == null) {
-            expiryTime = -1;
+            expiryTime = -1L;
         } else {
             if ("EX".equalsIgnoreCase(timeUnit)) {
                 expiryTime += time * 1000;
@@ -177,7 +180,7 @@ public class ClientHandler implements Runnable {
         if (expiryKey == null) {
             return nullRespString;
         }
-        Object value = expiryKey.getValue();
+        String value = expiryKey.getValue();
         long currentTime = Instant.now().toEpochMilli();
 
         Long expiryTime = expiryKey.getExpiryTime();
@@ -187,7 +190,7 @@ public class ClientHandler implements Runnable {
             keyMap.remove(key);
             return nullRespString;
         }
-        return outputEncoderService.encodeObject(value);
+        return outputEncoderService.encodeBulkString(value);
     }
 
     public void appendRightToList(String key, String value) {
@@ -260,6 +263,16 @@ public class ClientHandler implements Runnable {
                 waiters.remove(Thread.currentThread());
                 return nullRespString;
             }
+        }
+    }
+
+    private String getType(String key) {
+        if (keyMap.containsKey(key)) {
+            return outputEncoderService.encodeSimpleString("string");
+        } else if (listMap.containsKey(key)) {
+            return outputEncoderService.encodeSimpleString("list");
+        } else {
+            return outputEncoderService.encodeSimpleString("none");
         }
     }
 }

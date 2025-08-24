@@ -2,15 +2,15 @@ package Models;
 
 public class ExpiryKey {
 
-    Object value;
+    String value;
     Long expiryTime;
 
-    public ExpiryKey(Object value, long expiryTime) {
+    public ExpiryKey(String value, long expiryTime) {
         this.value = value;
         this.expiryTime = expiryTime;
     }
 
-    public Object getValue() {
+    public String getValue() {
         return value;
     }
 
@@ -22,7 +22,7 @@ public class ExpiryKey {
         this.expiryTime = expiryTime;
     }
 
-    public void setValue(Object value) {
+    public void setValue(String value) {
         this.value = value;
     }
 }
