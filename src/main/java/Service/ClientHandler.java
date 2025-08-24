@@ -10,16 +10,19 @@ import java.net.Socket;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 
-public class ClientHandler implements Runnable{
+public class ClientHandler implements Runnable {
 
     Socket clientSocket;
     OutputEncoderService outputEncoderService = new OutputEncoderService();
-    private final Map<String, ExpiryKey> keyValueMap = DataStore.getInstance().getKeyMap();
+    private final ConcurrentHashMap<String, ExpiryKey> keyMap = DataStore.getInstance().getKeyMap();
+    private final ConcurrentHashMap<String, List<String>> listMap = DataStore.getInstance().getListMap();
+    private final ConcurrentHashMap<String, BlockingQueue<Thread>> clientWaiters = DataStore.getInstance().getClientWaiters();
 
     public ClientHandler(Socket clientSocket) {
-        this.clientSocket=clientSocket;
+        this.clientSocket = clientSocket;
     }
 
     private static final String nullRespString = "$-1\r\n";
@@ -35,15 +38,14 @@ public class ClientHandler implements Runnable{
                 int num = inputStream.read(input);
                 if (num < 1)
                     break;
-                System.out.println("Received input from client: "+new String(input));
+                System.out.println("Received input from client: " + new String(input));
                 String output = respond(input);
-                System.out.println("Response being sent to client :"+output);
+                System.out.println("Response being sent to client :" + output);
                 outputStream.write(output.getBytes());
             }
         } catch (IOException e) {
             System.out.println("IOException: " + e.getMessage());
-        }
-        finally {
+        } finally {
             try {
                 if (clientSocket != null) {
                     clientSocket.close();
@@ -55,79 +57,67 @@ public class ClientHandler implements Runnable{
     }
 
     private String respond(byte[] input) {
-        if(input[0]=='*')
-        {
+        if (input[0] == '*') {
             List<String> arguments = parseArguments(input);
             String command = arguments.get(0);
-            if("PING".equalsIgnoreCase(command)) {
+            if ("PING".equalsIgnoreCase(command)) {
                 return outputEncoderService.encodeSimpleString("PONG");
-            }
-            else if("ECHO".equalsIgnoreCase(command)) {
+            } else if ("ECHO".equalsIgnoreCase(command)) {
                 String echoString = arguments.get(1);
                 return outputEncoderService.encodeBulkString(echoString);
-            }
-            else if("SET".equalsIgnoreCase(command)) {
+            } else if ("SET".equalsIgnoreCase(command)) {
                 String key = arguments.get(1);
                 String value = arguments.get(2);
-                if(arguments.size()<5) {
+                if (arguments.size() < 5) {
                     return setValue(key, value, null, null);
-                }
-                else {
+                } else {
                     String timeUnit = arguments.get(3);
                     Long time = Long.parseLong(arguments.get(4));
                     return setValue(key, value, timeUnit, time);
                 }
-            }
-            else if("GET".equalsIgnoreCase(command)) {
+            } else if ("GET".equalsIgnoreCase(command)) {
                 String key = arguments.get(1);
                 return getValue(key);
-            }
-            else if("RPUSH".equalsIgnoreCase(command)) {
+            } else if ("RPUSH".equalsIgnoreCase(command)) {
                 String key = arguments.get(1);
-                for(int i=2;i<arguments.size();i++) {
+                for (int i = 2; i < arguments.size(); i++) {
                     String value = arguments.get(i);
-                    appendRightToList(key,value);
+                    appendRightToList(key, value);
                 }
                 return outputEncoderService.encodeInteger(sizeOfList(key));
-            }
-            else if("LRANGE".equalsIgnoreCase(command)) {
+            } else if ("LRANGE".equalsIgnoreCase(command)) {
                 String key = arguments.get(1);
                 Integer startIndex = Integer.parseInt(arguments.get(2));
                 Integer endIndex = Integer.parseInt(arguments.get(3));
                 return listElementsInRange(key, startIndex, endIndex);
-            }
-            else if("LPUSH".equalsIgnoreCase(command)) {
+            } else if ("LPUSH".equalsIgnoreCase(command)) {
                 String key = arguments.get(1);
-                for(int i=2;i<arguments.size();i++) {
+                for (int i = 2; i < arguments.size(); i++) {
                     String value = arguments.get(i);
-                    appendLeftToList(key,value);
+                    appendLeftToList(key, value);
                 }
                 return outputEncoderService.encodeInteger(sizeOfList(key));
-            }
-            else if("LLEN".equalsIgnoreCase(command)) {
+            } else if ("LLEN".equalsIgnoreCase(command)) {
                 String key = arguments.get(1);
                 return outputEncoderService.encodeInteger(sizeOfList(key));
-            }
-            else if("LPOP".equalsIgnoreCase(command)) {
+            } else if ("LPOP".equalsIgnoreCase(command)) {
                 String key = arguments.get(1);
                 int len = 1;
-                if(arguments.size()<3) {
-                   return outputEncoderService.encodeBulkString(removeElementFromLeft(key));
+                if (arguments.size() < 3) {
+                    return outputEncoderService.encodeBulkString(removeElementFromLeft(key));
                 }
                 len = Integer.parseInt(arguments.get(2));
                 List<String> elements = new LinkedList<>();
-                for(int i=0; i<Math.min(len, sizeOfList(key)); i++) {
+                for (int i = 0; i < Math.min(len, sizeOfList(key)); i++) {
                     String element = removeElementFromLeft(key);
                     elements.addLast(element);
                 }
                 return outputEncoderService.encodeList(elements);
-            }
-            else if("BLPOP".equalsIgnoreCase(command)) {
+            } else if ("BLPOP".equalsIgnoreCase(command)) {
                 String key = arguments.get(1);
-                int timeout = Integer.parseInt(arguments.get(2));
+                Double timeout = Double.parseDouble(arguments.get(2));
                 return removeBlockedElementFromLeft(key, timeout);
-            }
-            else {
+            } else {
                 throw new RuntimeException("Command not found");
             }
         }
@@ -135,30 +125,30 @@ public class ClientHandler implements Runnable{
     }
 
     public List<String> parseArguments(byte[] input) {
-        int in =1;
-        int numberOfArguments=0;
-        while(input[in]!='\r') {
-            numberOfArguments = numberOfArguments*10+ (input[in]-'0');
+        int in = 1;
+        int numberOfArguments = 0;
+        while (input[in] != '\r') {
+            numberOfArguments = numberOfArguments * 10 + (input[in] - '0');
             in++;
         }
-        System.out.println("The number of arguments sent are :"+numberOfArguments);
-        in+=2;
-        ArrayList<String> arguments= new ArrayList<>();
-        for(int i=0;i<numberOfArguments;i++) {
+        System.out.println("The number of arguments sent are :" + numberOfArguments);
+        in += 2;
+        ArrayList<String> arguments = new ArrayList<>();
+        for (int i = 0; i < numberOfArguments; i++) {
             in++;
-            int argumentLength=0;
-            while(input[in]!='\r') {
-                argumentLength = argumentLength*10+ (input[in]-'0');
+            int argumentLength = 0;
+            while (input[in] != '\r') {
+                argumentLength = argumentLength * 10 + (input[in] - '0');
                 in++;
             }
-            in+=2;
-            System.out.println("Argument "+i+" Length: "+argumentLength);
-            StringBuilder argument= new StringBuilder();
-            for(int j=0;j<argumentLength;j++,in++) {
-                argument.append((char)input[in]);
+            in += 2;
+            System.out.println("Argument " + i + " Length: " + argumentLength);
+            StringBuilder argument = new StringBuilder();
+            for (int j = 0; j < argumentLength; j++, in++) {
+                argument.append((char) input[in]);
             }
-            in+=2;
-            System.out.println("Argument "+i+" : "+argument);
+            in += 2;
+            System.out.println("Argument " + i + " : " + argument);
             arguments.add(argument.toString());
         }
         return arguments;
@@ -166,159 +156,110 @@ public class ClientHandler implements Runnable{
 
     private String setValue(String key, String value, String timeUnit, Long time) {
         long expiryTime = Instant.now().toEpochMilli();
-        if(timeUnit == null) {
+        if (timeUnit == null) {
             expiryTime = -1;
-        }
-        else {
-            if("EX".equalsIgnoreCase(timeUnit)) {
-                expiryTime+=time*1000;
-            }
-            else if("PX".equalsIgnoreCase(timeUnit)) {
+        } else {
+            if ("EX".equalsIgnoreCase(timeUnit)) {
+                expiryTime += time * 1000;
+            } else if ("PX".equalsIgnoreCase(timeUnit)) {
                 expiryTime += time;
-            }
-            else {
+            } else {
                 throw new RuntimeException("Incorrect unit for time sent, it can only be PX or EX.");
             }
         }
-        keyValueMap.put(key, new ExpiryKey(value, expiryTime, null));
-        System.out.println("Key : "+key+" set with the value: "+value+" and expiry time: "+expiryTime);
+        keyMap.put(key, new ExpiryKey(value, expiryTime));
+        System.out.println("Key : " + key + " set with the value: " + value + " and expiry time: " + expiryTime);
         return "+OK\r\n";
     }
 
     private String getValue(String key) {
-        ExpiryKey expiryKey = keyValueMap.get(key);
-        if(expiryKey == null) {
+        ExpiryKey expiryKey = keyMap.get(key);
+        if (expiryKey == null) {
             return nullRespString;
         }
         Object value = expiryKey.getValue();
         long currentTime = Instant.now().toEpochMilli();
 
         Long expiryTime = expiryKey.getExpiryTime();
-        System.out.println("The value of key : "+key+" is : "+value+", and the expiry time is: "+expiryTime);
-        System.out.println("Time when accessing key : "+key+ " is : " + currentTime);
-        if(expiryTime!=-1 && currentTime>expiryTime) {
-            keyValueMap.remove(key);
+        System.out.println("The value of key : " + key + " is : " + value + ", and the expiry time is: " + expiryTime);
+        System.out.println("Time when accessing key : " + key + " is : " + currentTime);
+        if (expiryTime != -1 && currentTime > expiryTime) {
+            keyMap.remove(key);
             return nullRespString;
         }
         return outputEncoderService.encodeObject(value);
     }
 
     public void appendRightToList(String key, String value) {
-
-        if (keyValueMap.get(key) == null) {
-            List<String> list = new LinkedList<>();
-            list.addLast(value);
-            keyValueMap.put(key, new ExpiryKey(list, -1, null));
-        } else if (keyValueMap.get(key).getValue() instanceof List<?>) {
-            @SuppressWarnings("unchecked")
-            List<String> list = (List<String>) keyValueMap.get(key).getValue();
-            list.addLast(value);
-        } else {
-            throw new IllegalArgumentException("Value at key is not a List<String>");
-        }
+        listMap.computeIfAbsent(key, k -> new LinkedList<>()).addLast(value);
     }
 
     public void appendLeftToList(String key, String value) {
-
-        if (keyValueMap.get(key) == null) {
-            List<String> list = new LinkedList<>();
-            list.addFirst(value);
-            keyValueMap.put(key, new ExpiryKey(list, -1, null));
-        } else if (keyValueMap.get(key).getValue() instanceof List<?>) {
-            @SuppressWarnings("unchecked")
-            List<String> list = (List<String>) keyValueMap.get(key).getValue();
-            list.addFirst(value);
-        } else {
-            throw new IllegalArgumentException("Value at key is not a List<String>");
-        }
+        listMap.computeIfAbsent(key, k -> new LinkedList<>()).addFirst(value);
     }
 
     public String removeElementFromLeft(String key) {
-        if (keyValueMap.get(key) == null) {
+        List<String> list = listMap.get(key);
+        if (list == null || list.isEmpty()) {
             return nullRespString;
-        } else if (keyValueMap.get(key).getValue() instanceof List<?>) {
-            @SuppressWarnings("unchecked")
-            List<String> list = (List<String>) keyValueMap.get(key).getValue();
-            if(list.isEmpty()) {
-                return nullRespString;
-            }
-            return list.removeFirst();
-        } else {
-            throw new IllegalArgumentException("Value at key is not a List<String>");
         }
+        return list.removeFirst();
     }
 
     public Integer sizeOfList(String key) {
-        if(keyValueMap.get(key) == null) {
-            return 0;
-        }
-        if (keyValueMap.get(key).getValue() instanceof List<?>) {
-            @SuppressWarnings("unchecked")
-            List<String> list = (List<String>) keyValueMap.get(key).getValue();
-            return list.size();
-        } else {
-            throw new IllegalArgumentException("Value at key is not a List<String>");
-        }
+        List<String> list = listMap.get(key);
+        return (list == null) ? 0 : list.size();
     }
 
     public String listElementsInRange(String key, Integer startIndex, Integer endIndex) {
-        if (keyValueMap.get(key) == null) {
+        List<String> list = listMap.get(key);
+        if (list == null || list.isEmpty()) {
             return nullRespArray;
-        } else if (keyValueMap.get(key).getValue() instanceof List<?>) {
-            @SuppressWarnings("unchecked")
-            List<String> list = (List<String>) keyValueMap.get(key).getValue();
-            int len =list.size();
-            if(startIndex<0)
-                startIndex+=len;
-            if(endIndex<0)
-                endIndex+=len;
-            if(startIndex >= len) {
-                return nullRespArray;
-            }
-            else if(startIndex>endIndex) {
-                return nullRespArray;
-            }
-            List<String> subList = list.subList(Math.max(0,startIndex), Math.max(0,Math.min(len, endIndex+1)));
-            return outputEncoderService.encodeList(subList);
-        } else {
-            throw new IllegalArgumentException("Value at key is not a List<String>");
         }
+
+        int len = list.size();
+        if (startIndex < 0)
+            startIndex += len;
+        if (endIndex < 0)
+            endIndex += len;
+        if (startIndex >= len) {
+            return nullRespArray;
+        } else if (startIndex > endIndex) {
+            return nullRespArray;
+        }
+        List<String> subList = list.subList(Math.max(0, startIndex), Math.max(0, Math.min(len, endIndex + 1)));
+        return outputEncoderService.encodeList(subList);
     }
 
-    @SuppressWarnings("unchecked")
-    private String removeBlockedElementFromLeft(String key, int timeout) {
-        long current = System.currentTimeMillis();
-        BlockingQueue<Thread> waiters;
-        if(keyValueMap.get(key) == null) {
-            waiters = new LinkedBlockingQueue<>();
-            keyValueMap.put(key, new ExpiryKey(new ArrayList<>(), -1, waiters));
-        }
-        if(keyValueMap.get(key).getWaiters() == null) {
-            waiters = new LinkedBlockingQueue<>();
-        }
-        else {
-            waiters = keyValueMap.get(key).getWaiters();
-        }
+    private String removeBlockedElementFromLeft(String key, Double timeout) {
+        long start = System.currentTimeMillis();
+        long timeoutMilliSeconds = Math.round(timeout * 1000);
+        BlockingQueue<Thread> waiters = clientWaiters.computeIfAbsent(key, k -> new LinkedBlockingQueue<>());
         waiters.add(Thread.currentThread());
-        System.out.println("The thread at top of the queue with key " + key+ " is  : "+ waiters.peek().getName());
-        while( timeout == 0 ) {
-            System.out.println("The thread at top of the queue with key " + key+ " is  : "+ waiters.peek().getName());
-            if(waiters.peek() == Thread.currentThread()) {
-                List<String> elements = (List<String>) keyValueMap.get(key).getValue();
-                if(!elements.isEmpty()) {
-                    waiters.remove();
-                    ArrayList<String> response = new ArrayList<>();
-                    response.add(key);
-                    response.add(removeElementFromLeft(key));
-                    return outputEncoderService.encodeList(response);
-                }
+
+        while (true) {
+            List<String> elements = listMap.get(key);
+            if (elements != null && !elements.isEmpty()) {
+                waiters.remove(Thread.currentThread());
+                ArrayList<String> response = new ArrayList<>();
+                response.add(key);
+                response.add(removeElementFromLeft(key));
+                return outputEncoderService.encodeList(response);
             }
+
+            long current = System.currentTimeMillis();
+            if (timeoutMilliSeconds != 0 && (current - start) > timeoutMilliSeconds) {
+                waiters.remove(Thread.currentThread());
+                return nullRespString;
+            }
+
             try {
-                Thread.sleep(10);
+                Thread.sleep(1);
             } catch (InterruptedException e) {
-                throw new RuntimeException(e);
+                Thread.currentThread().interrupt();
+                waiters.remove(Thread.currentThread());
+                return nullRespString;
             }
         }
-        return nullRespString;
     }
 }
