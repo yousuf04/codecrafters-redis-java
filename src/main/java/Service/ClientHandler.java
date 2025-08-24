@@ -1,5 +1,6 @@
 package Service;
 
+import Models.DataStore;
 import Models.ExpiryKey;
 
 import java.io.IOException;
@@ -8,16 +9,17 @@ import java.io.OutputStream;
 import java.net.Socket;
 import java.time.Instant;
 import java.util.*;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 
 public class ClientHandler implements Runnable{
 
     Socket clientSocket;
-    Map<String, ExpiryKey> keyValueMap;
     OutputEncoderService outputEncoderService = new OutputEncoderService();
+    private final Map<String, ExpiryKey> keyValueMap = DataStore.getInstance().getKeyMap();
 
     public ClientHandler(Socket clientSocket) {
         this.clientSocket=clientSocket;
-        this.keyValueMap = new HashMap<>();
     }
 
     private static final String nullRespString = "$-1\r\n";
@@ -120,6 +122,11 @@ public class ClientHandler implements Runnable{
                 }
                 return outputEncoderService.encodeList(elements);
             }
+            else if("BLPOP".equalsIgnoreCase(command)) {
+                String key = arguments.get(1);
+                int timeout = Integer.parseInt(arguments.get(2));
+                return removeBlockedElementFromLeft(key, timeout);
+            }
             else {
                 throw new RuntimeException("Command not found");
             }
@@ -173,7 +180,7 @@ public class ClientHandler implements Runnable{
                 throw new RuntimeException("Incorrect unit for time sent, it can only be PX or EX.");
             }
         }
-        keyValueMap.put(key, new ExpiryKey(value, expiryTime));
+        keyValueMap.put(key, new ExpiryKey(value, expiryTime, null));
         System.out.println("Key : "+key+" set with the value: "+value+" and expiry time: "+expiryTime);
         return "+OK\r\n";
     }
@@ -201,7 +208,7 @@ public class ClientHandler implements Runnable{
         if (keyValueMap.get(key) == null) {
             List<String> list = new LinkedList<>();
             list.addLast(value);
-            keyValueMap.put(key, new ExpiryKey(list, -1));
+            keyValueMap.put(key, new ExpiryKey(list, -1, null));
         } else if (keyValueMap.get(key).getValue() instanceof List<?>) {
             @SuppressWarnings("unchecked")
             List<String> list = (List<String>) keyValueMap.get(key).getValue();
@@ -216,7 +223,7 @@ public class ClientHandler implements Runnable{
         if (keyValueMap.get(key) == null) {
             List<String> list = new LinkedList<>();
             list.addFirst(value);
-            keyValueMap.put(key, new ExpiryKey(list, -1));
+            keyValueMap.put(key, new ExpiryKey(list, -1, null));
         } else if (keyValueMap.get(key).getValue() instanceof List<?>) {
             @SuppressWarnings("unchecked")
             List<String> list = (List<String>) keyValueMap.get(key).getValue();
@@ -276,5 +283,31 @@ public class ClientHandler implements Runnable{
         } else {
             throw new IllegalArgumentException("Value at key is not a List<String>");
         }
+    }
+
+    private String removeBlockedElementFromLeft(String key, int timeout) {
+        long current = System.currentTimeMillis();
+        BlockingQueue<Socket> clients;
+        if(keyValueMap.get(key).getClients() == null) {
+            clients = new LinkedBlockingQueue<>();
+        }
+        else {
+            clients = keyValueMap.get(key).getClients();
+        }
+        clients.add(clientSocket);
+        System.out.println("The client at top of the queue with key" + key+ "is with port : "+ clients.peek().getPort());
+        while( timeout == 0 ) {
+            System.out.println("The client at top of the queue with key" + key+ "is with port : "+ clients.peek().getPort());
+            if(clients.peek() == clientSocket) {
+                clients.remove();
+                return removeElementFromLeft(key);
+            }
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+        }
+        return nullRespString;
     }
 }

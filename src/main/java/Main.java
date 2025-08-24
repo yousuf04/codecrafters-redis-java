@@ -1,10 +1,14 @@
+import Models.ExpiryKey;
 import Service.ClientHandler;
 
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.HashMap;
+import java.util.Map;
 
 public class Main {
+    private static final Map<String, ExpiryKey> keyValueMap = new HashMap<>();
     public static void main(String[] args){
         ServerSocket serverSocket = null;
         Socket clientSocket = null;
