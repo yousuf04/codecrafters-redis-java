@@ -110,7 +110,8 @@ public class ClientHandler implements Runnable {
                 }
                 len = Integer.parseInt(arguments.get(2));
                 List<String> elements = new LinkedList<>();
-                for (int i = 0; i < Math.min(len, sizeOfList(key)); i++) {
+                Integer sizeOfList = sizeOfList(key);
+                for (int i = 0; i < Math.min(len, sizeOfList); i++) {
                     String element = removeElementFromLeft(key);
                     elements.addLast(element);
                 }
