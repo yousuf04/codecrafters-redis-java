@@ -1,6 +1,7 @@
 package Service;
 
 import Models.DataStore;
+import Models.Entry;
 import Models.ExpiryKey;
 
 import java.io.IOException;
@@ -20,6 +21,7 @@ public class ClientHandler implements Runnable {
     private final ConcurrentHashMap<String, ExpiryKey> keyMap = DataStore.getInstance().getKeyMap();
     private final ConcurrentHashMap<String, List<String>> listMap = DataStore.getInstance().getListMap();
     private final ConcurrentHashMap<String, BlockingQueue<Thread>> clientWaiters = DataStore.getInstance().getClientWaiters();
+    private final ConcurrentHashMap<String, Entry> streamMap = DataStore.getInstance().getStreamMap();
 
     public ClientHandler(Socket clientSocket) {
         this.clientSocket = clientSocket;
@@ -120,7 +122,17 @@ public class ClientHandler implements Runnable {
             } else if ("TYPE".equalsIgnoreCase(command)) {
                 String key = arguments.get(1);
                 return getType(key);
-            } else {
+            } else if ("XADD".equalsIgnoreCase(command)) {
+                String key = arguments.get(1);
+                String id = arguments.get(2);
+                Map<String, String> keyValueMap = new HashMap<>();
+                for(int i = 3; i < arguments.size(); i+=2) {
+                    keyValueMap.put(arguments.get(i), arguments.get(i+1));
+                }
+                streamMap.put(key, new Entry(id, keyValueMap));
+                return outputEncoderService.encodeBulkString(id);
+            }
+            else {
                 throw new RuntimeException("Command not found");
             }
         }
@@ -271,7 +283,10 @@ public class ClientHandler implements Runnable {
             return outputEncoderService.encodeSimpleString("string");
         } else if (listMap.containsKey(key)) {
             return outputEncoderService.encodeSimpleString("list");
-        } else {
+        } else if (streamMap.containsKey(key)) {
+            return outputEncoderService.encodeSimpleString("stream");
+        }
+        else {
             return outputEncoderService.encodeSimpleString("none");
         }
     }

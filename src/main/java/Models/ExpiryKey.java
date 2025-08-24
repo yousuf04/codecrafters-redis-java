@@ -2,8 +2,8 @@ package Models;
 
 public class ExpiryKey {
 
-    String value;
-    Long expiryTime;
+    private String value;
+    private Long expiryTime;
 
     public ExpiryKey(String value, long expiryTime) {
         this.value = value;
