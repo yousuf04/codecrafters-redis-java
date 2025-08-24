@@ -285,25 +285,36 @@ public class ClientHandler implements Runnable{
         }
     }
 
+    @SuppressWarnings("unchecked")
     private String removeBlockedElementFromLeft(String key, int timeout) {
         long current = System.currentTimeMillis();
-        BlockingQueue<Socket> clients;
-        if(keyValueMap.get(key).getClients() == null) {
-            clients = new LinkedBlockingQueue<>();
+        BlockingQueue<Thread> waiters;
+        if(keyValueMap.get(key) == null) {
+            waiters = new LinkedBlockingQueue<>();
+            keyValueMap.put(key, new ExpiryKey(new ArrayList<>(), -1, waiters));
+        }
+        if(keyValueMap.get(key).getWaiters() == null) {
+            waiters = new LinkedBlockingQueue<>();
         }
         else {
-            clients = keyValueMap.get(key).getClients();
+            waiters = keyValueMap.get(key).getWaiters();
         }
-        clients.add(clientSocket);
-        System.out.println("The client at top of the queue with key" + key+ "is with port : "+ clients.peek().getPort());
+        waiters.add(Thread.currentThread());
+        System.out.println("The thread at top of the queue with key " + key+ " is  : "+ waiters.peek().getName());
         while( timeout == 0 ) {
-            System.out.println("The client at top of the queue with key" + key+ "is with port : "+ clients.peek().getPort());
-            if(clients.peek() == clientSocket) {
-                clients.remove();
-                return removeElementFromLeft(key);
+            System.out.println("The thread at top of the queue with key " + key+ " is  : "+ waiters.peek().getName());
+            if(waiters.peek() == Thread.currentThread()) {
+                List<String> elements = (List<String>) keyValueMap.get(key).getValue();
+                if(!elements.isEmpty()) {
+                    waiters.remove();
+                    ArrayList<String> response = new ArrayList<>();
+                    response.add(key);
+                    response.add(removeElementFromLeft(key));
+                    return outputEncoderService.encodeList(response);
+                }
             }
             try {
-                Thread.sleep(1000);
+                Thread.sleep(10);
             } catch (InterruptedException e) {
                 throw new RuntimeException(e);
             }

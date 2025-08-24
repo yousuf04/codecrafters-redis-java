@@ -1,19 +1,18 @@
 package Models;
 
 import java.net.Socket;
-import java.util.concurrent.BlockingDeque;
 import java.util.concurrent.BlockingQueue;
 
 public class ExpiryKey {
 
     Object value;
     Long expiryTime;
-    BlockingQueue<Socket> clients;
+    BlockingQueue<Thread> waiters;
 
-    public ExpiryKey(Object value, long expiryTime, BlockingQueue<Socket> clients) {
+    public ExpiryKey(Object value, long expiryTime, BlockingQueue<Thread> waiters) {
         this.value = value;
         this.expiryTime = expiryTime;
-        this.clients = clients;
+        this.waiters = waiters;
     }
 
     public Object getValue() {
@@ -24,8 +23,8 @@ public class ExpiryKey {
         return expiryTime;
     }
 
-    public BlockingQueue<Socket> getClients() {
-        return clients;
+    public BlockingQueue<Thread> getWaiters() {
+        return waiters;
     }
 
     public void setExpiryTime(Long expiryTime) {
@@ -36,7 +35,7 @@ public class ExpiryKey {
         this.value = value;
     }
 
-    public void setClients(BlockingQueue<Socket> clients) {
-        this.clients = clients;
+    public void setWaiters(BlockingQueue<Thread> waiters) {
+        this.waiters = waiters;
     }
 }
