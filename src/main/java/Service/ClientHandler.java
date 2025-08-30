@@ -199,9 +199,14 @@ public class ClientHandler implements Runnable {
                 return entriesInRange(key, startId, endId);
             }
             else if ("XREAD".equalsIgnoreCase(command)) {
-                String key = arguments.get(2);
-                String startId = arguments.get(3);
-                return entriesStartingFrom(key, startId);
+                int numberOfKeys = (arguments.size() - 2)/2;
+                StringBuilder stringBuilder = new StringBuilder();
+                for(int i=0; i<numberOfKeys; i++) {
+                    String key = arguments.get(i+2);
+                    String startId = arguments.get(i + numberOfKeys +2);
+                    stringBuilder.append(entriesStartingFrom(key, startId));
+                }
+                return stringBuilder.toString();
             }
             else {
                 throw new RuntimeException("Command not found");
