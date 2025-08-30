@@ -542,7 +542,10 @@ public class ClientHandler implements Runnable {
     }
 
     private String elementsAddedInTime(String time, String key, String startId) {
-        startId = createId(key);
+        String lastId = createId(key);
+        if(compare(lastId, startId) > 0) {
+            startId = lastId;
+        }
         try {
             Thread.sleep(Long.parseLong(time));
         }
@@ -551,5 +554,26 @@ public class ClientHandler implements Runnable {
         }
         return "*1\r\n" +
                 entriesStartingFrom(key, startId);
+    }
+
+    private int compare(String id1, String id2) {
+
+        List<String> parts1 = Arrays.asList(id1.split("-"));
+        Long milliseconds1 = Long.parseLong(parts1.getFirst());
+        Long sequenceNumber1 = Long.parseLong(parts1.getLast());
+
+        List<String> parts2 = Arrays.asList(id1.split("-"));
+        Long milliseconds2 = Long.parseLong(parts2.getFirst());
+        Long sequenceNumber2 = Long.parseLong(parts2.getLast());
+
+        if(milliseconds1.compareTo(milliseconds2) ==0 ) {
+            return Integer.compare(sequenceNumber1.compareTo(sequenceNumber2), 0);
+        }
+        else if (milliseconds1.compareTo(milliseconds2) >0) {
+            return 1;
+        }
+        else {
+            return 0;
+        }
     }
 }
