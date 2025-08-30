@@ -12,6 +12,7 @@ import java.net.Socket;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class ClientHandler implements Runnable {
@@ -100,7 +101,9 @@ public class ClientHandler implements Runnable {
                         appendRightToList(key, value);
                     }
                     for (int i = 0; i < itemsPushed; i++) {
-                        lac.getCondition().signal();
+                        if(!lac.getWaiters().isEmpty()) {
+                            lac.getWaiters().remove().signal();
+                        }
                     }
                     return outputEncoderService.encodeInteger(sizeOfList(key));
                 }
@@ -132,7 +135,9 @@ public class ClientHandler implements Runnable {
                         appendLeftToList(key, value);
                     }
                     for (int i = 0; i < itemsPushed; i++) {
-                        lac.getCondition().signal();
+                        if( !lac.getWaiters().isEmpty()) {
+                            lac.getWaiters().remove().signal();
+                        }
                     }
                     return outputEncoderService.encodeInteger(sizeOfList(key));
                 }
@@ -303,32 +308,35 @@ public class ClientHandler implements Runnable {
 
     private String removeBlockedElementFromLeft(String key, Double timeout) {
         LockAndCondition lac = getLockAndCondition(key);
+        lac.getLock().lock();
         try {
-            lac.getLock().lockInterruptibly();
+            if (!isListEmpty(key)) {
+                return encodeBlpopValue(key);
+            }
+            Condition myCondition = lac.getLock().newCondition();
+            lac.getWaiters().add(myCondition);
             try {
                 if (timeout == 0.0) {
-                    while (isListEmpty(key)) {
-                        lac.getCondition().await();
-                    }
+                    myCondition.await();
                 } else {
                     long timeoutNanos = Math.round(timeout * 1_000_000_000L);
-                    while (isListEmpty(key)) {
-                        if (timeoutNanos <= 0) {
-                            return nullRespArray;
-                        }
-                        timeoutNanos = lac.getCondition().awaitNanos(timeoutNanos);
-                    }
+                    myCondition.awaitNanos(timeoutNanos);
                 }
-                List<String> list = listMap.get(key);
-                String element = list.removeFirst();
-                List<String> response = Arrays.asList(key, element);
-                return outputEncoderService.encodeList(response);
-            } finally {
-                lac.getLock().unlock();
             }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return nullRespArray;
+            catch (Exception ex) {
+                lac.getWaiters().remove(myCondition);
+                Thread.currentThread().interrupt();
+                return nullRespArray;
+            }
+            if(!isListEmpty(key)) {
+                return encodeBlpopValue(key);
+            }
+            else {
+                return nullRespArray;
+            }
+
+        } finally {
+            lac.getLock().unlock();
         }
     }
 
@@ -398,5 +406,12 @@ public class ClientHandler implements Runnable {
         Long milliseconds = lastEntry.getMilliseconds();
         Long sequenceNumber = lastEntry.getSequenceNumber();
         return milliseconds.toString()+"-"+sequenceNumber.toString();
+    }
+
+    private String encodeBlpopValue(String key) {
+        List<String> list = listMap.get(key);
+        String element = list.removeFirst();
+        List<String> response = Arrays.asList(key, element);
+        return outputEncoderService.encodeList(response);
     }
 }

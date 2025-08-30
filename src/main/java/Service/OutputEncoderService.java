@@ -1,5 +1,6 @@
 package Service;
 
+import java.util.Arrays;
 import java.util.List;
 
 public class OutputEncoderService {
@@ -43,4 +44,5 @@ public class OutputEncoderService {
     public String encodeSimpleError(String errorMessage) {
         return "-ERR " + errorMessage + "\r\n";
     }
+
 }
