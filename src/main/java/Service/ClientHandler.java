@@ -199,8 +199,8 @@ public class ClientHandler implements Runnable {
                 return entriesInRange(key, startId, endId);
             }
             else if ("XREAD".equalsIgnoreCase(command)) {
-                String key = arguments.get(1);
-                String startId = arguments.get(2);
+                String key = arguments.get(2);
+                String startId = arguments.get(3);
                 return entriesStartingFrom(key, startId);
             }
             else {
