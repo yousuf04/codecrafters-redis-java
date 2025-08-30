@@ -584,6 +584,6 @@ public class ClientHandler implements Runnable {
         long milliseconds = Long.parseLong(parts.getFirst());
         long sequenceNumber = Long.parseLong(parts.getLast()) + 1;
 
-        return milliseconds.toString() + "-" + sequenceNumber.toString();
+        return milliseconds + "-" + sequenceNumber;
     }
 }
