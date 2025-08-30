@@ -454,7 +454,11 @@ public class ClientHandler implements Runnable {
 
         Long startMilliseconds;
         Long startSequenceNumber;
-        if(startId.contains("-")) {
+        if(startId.equals("-")) {
+            startMilliseconds = 0L;
+            startSequenceNumber = 0L;
+        }
+        else if(startId.contains("-")) {
             List<String> parts = Arrays.asList(startId.split("-"));
             startMilliseconds = Long.parseLong(parts.getFirst());
             startSequenceNumber = Long.parseLong(parts.getLast());
