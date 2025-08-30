@@ -543,6 +543,7 @@ public class ClientHandler implements Runnable {
 
     private String elementsAddedInTime(String time, String key, String startId) {
         String lastId = createId(key);
+        String lastId = incrementId(lastId);
         if(compare(lastId, startId) > 0) {
             startId = lastId;
         }
@@ -575,5 +576,14 @@ public class ClientHandler implements Runnable {
         else {
             return 0;
         }
+    }
+
+    private String incrementId(String id) {
+
+        List<String> parts = Arrays.asList(id.split("-"));
+        long milliseconds = Long.parseLong(parts.getFirst());
+        long sequenceNumber = Long.parseLong(parts.getLast()) + 1;
+
+        return milliseconds.toString() + "-" + sequenceNumber.toString();
     }
 }
