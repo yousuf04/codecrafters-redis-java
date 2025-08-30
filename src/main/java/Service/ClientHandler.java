@@ -542,26 +542,43 @@ public class ClientHandler implements Runnable {
     }
 
     private String elementsAddedInTime(String time, String key, String startId) {
-
         int lastIndex = streamMap.get(key).size();
-        try {
-            Thread.sleep(Long.parseLong(time));
-        }
-        catch (Exception e) {
-            throw new RuntimeException(e.getMessage());
-        }
-
         List<Entry> entries = new ArrayList<>();
 
-        for(int i = lastIndex; i < streamMap.get(key).size(); i++) {
-
-            if(compare(streamMap.get(key).get(i).getId(), startId) >0) {
-                entries.add(streamMap.get(key).get(i));
+        if(Long.parseLong(time) ==0) {
+            while (true) {
+                for (int i = lastIndex; i < streamMap.get(key).size(); i++) {
+                    if (compare(streamMap.get(key).get(i).getId(), startId) > 0) {
+                        entries.add(streamMap.get(key).get(i));
+                        break;
+                    }
+                    lastIndex = i;
+                }
+                if(!entries.isEmpty()) {
+                    break;
+                }
+                try {
+                    Thread.sleep(Long.parseLong(time));
+                } catch (Exception e) {
+                    throw new RuntimeException(e.getMessage());
+                }
             }
         }
-
-        if(entries.isEmpty()) {
-            return nullRespArray;
+        else {
+            try {
+                Thread.sleep(Long.parseLong(time));
+            } catch (Exception e) {
+                throw new RuntimeException(e.getMessage());
+            }
+            for (int i = lastIndex; i < streamMap.get(key).size(); i++) {
+                if (compare(streamMap.get(key).get(i).getId(), startId) > 0) {
+                    entries.add(streamMap.get(key).get(i));
+                    break;
+                }
+            }
+            if (entries.isEmpty()) {
+                return nullRespArray;
+            }
         }
         return "*1\r\n" + "*2\r\n" + outputEncoderService.encodeBulkString(key) +
                 outputEncoderService.encodeEntryList(entries);
