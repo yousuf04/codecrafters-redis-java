@@ -453,6 +453,7 @@ public class ClientHandler implements Runnable {
     private String entriesInRange(String key, String startId, String endId) {
         Long startMilliseconds;
         Long startSequenceNumber;
+
         if(startId.equals("-")) {
             startMilliseconds = 0L;
             startSequenceNumber = 0L;
@@ -469,7 +470,12 @@ public class ClientHandler implements Runnable {
 
         Long endMilliseconds;
         Long endSequenceNumber;
-        if(startId.contains("-")) {
+
+        if(endId.equals("+")) {
+            endMilliseconds = Long.MAX_VALUE;
+            endSequenceNumber = Long.MAX_VALUE;
+        }
+        else if(endId.contains("-")) {
             List<String> parts = Arrays.asList(endId.split("-"));
             endMilliseconds = Long.parseLong(parts.getFirst());
             endSequenceNumber = Long.parseLong(parts.getLast());
