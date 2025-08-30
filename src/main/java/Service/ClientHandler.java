@@ -200,7 +200,8 @@ public class ClientHandler implements Runnable {
             }
             else if ("XREAD".equalsIgnoreCase(command)) {
                 int numberOfKeys = (arguments.size() - 2)/2;
-                StringBuilder stringBuilder = new StringBuilder();
+                StringBuilder stringBuilder = new StringBuilder("*");
+                stringBuilder.append(numberOfKeys).append("/r/n");
                 for(int i=0; i<numberOfKeys; i++) {
                     String key = arguments.get(i+2);
                     String startId = arguments.get(i + numberOfKeys +2);
@@ -528,7 +529,7 @@ public class ClientHandler implements Runnable {
                 entries.add(entry);
             }
         }
-        return "*1\r\n" + "*2\r\n" +
+        return  "*2\r\n" +
                 outputEncoderService.encodeBulkString(key) +
                 outputEncoderService.encodeEntryList(entries);
     }
