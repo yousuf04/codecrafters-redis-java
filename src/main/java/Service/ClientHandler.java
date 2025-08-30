@@ -353,25 +353,49 @@ public class ClientHandler implements Runnable {
     private String addEntry(String key, String id, Map<String, String> keyValueMap) {
         List<String> parts = List.of(id.split("-"));
         Long milliseconds = Long.parseLong(parts.get(0));
-        Long sequenceNumber = Long.parseLong(parts.get(1));
-        if( milliseconds==0 && sequenceNumber==0) {
-            return outputEncoderService.encodeSimpleError("The ID specified in XADD must be greater than 0-0");
+        Long sequenceNumber;
+        if(parts.get(1).equals("*")) {
+            if (!streamMap.get(key).isEmpty() &&
+                    streamMap.get(key).getLast().getMilliseconds().compareTo(milliseconds) == 0) {
+                sequenceNumber = streamMap.get(key).getLast().getMilliseconds() + 1;
+            }
+            else {
+                if(milliseconds == 0) {
+                    sequenceNumber = 1L;
+                }
+                else {
+                    sequenceNumber = 0L;
+                }
+            }
         }
-        streamMap.computeIfAbsent(key, k -> new ArrayList<>());
-        if(!streamMap.get(key).isEmpty()) {
-            Entry lastEntry = streamMap.get(key).getLast();
-            Long previousMilliseconds = lastEntry.getMilliseconds();
-            Long previousSequenceNumber = lastEntry.getSequenceNumber();
+        else {
+            sequenceNumber = Long.parseLong(parts.get(1));
+            if (milliseconds == 0 && sequenceNumber == 0) {
+                return outputEncoderService.encodeSimpleError("The ID specified in XADD must be greater than 0-0");
+            }
+            streamMap.computeIfAbsent(key, k -> new ArrayList<>());
+            if (!streamMap.get(key).isEmpty()) {
+                Entry lastEntry = streamMap.get(key).getLast();
+                Long previousMilliseconds = lastEntry.getMilliseconds();
+                Long previousSequenceNumber = lastEntry.getSequenceNumber();
 
-            if( milliseconds.compareTo(previousMilliseconds) < 0 ||
-                    (milliseconds.compareTo(previousMilliseconds) == 0
-                            && sequenceNumber.compareTo(previousSequenceNumber) <= 0)) {
-                return outputEncoderService.encodeSimpleError("The ID specified in XADD is equal or smaller " +
-                        "than the target stream top item");
+                if (milliseconds.compareTo(previousMilliseconds) < 0 ||
+                        (milliseconds.compareTo(previousMilliseconds) == 0
+                                && sequenceNumber.compareTo(previousSequenceNumber) <= 0)) {
+                    return outputEncoderService.encodeSimpleError("The ID specified in XADD is equal or smaller " +
+                            "than the target stream top item");
+                }
             }
         }
         Entry entry = new Entry(milliseconds, sequenceNumber, keyValueMap);
         streamMap.get(key).add(entry);
-        return outputEncoderService.encodeBulkString(id);
+        return outputEncoderService.encodeBulkString(createId(key));
+    }
+
+    private String createId(String key) {
+        Entry lastEntry = streamMap.get(key).getLast();
+        Long milliseconds = lastEntry.getMilliseconds();
+        Long sequenceNumber = lastEntry.getSequenceNumber();
+        return milliseconds.toString()+"-"+sequenceNumber.toString();
     }
 }
