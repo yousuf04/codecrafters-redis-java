@@ -39,4 +39,8 @@ public class OutputEncoderService {
         }
         return ans.toString();
     }
+
+    public String encodeSimpleError(String errorMessage) {
+        return "-ERR " + errorMessage + "\r\n";
+    }
 }

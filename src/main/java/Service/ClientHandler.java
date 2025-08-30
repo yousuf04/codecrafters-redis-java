@@ -3,6 +3,7 @@ package Service;
 import Models.DataStore;
 import Models.Entry;
 import Models.ExpiryKey;
+import Models.LockAndCondition;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -10,9 +11,8 @@ import java.io.OutputStream;
 import java.net.Socket;
 import java.time.Instant;
 import java.util.*;
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class ClientHandler implements Runnable {
 
@@ -20,15 +20,20 @@ public class ClientHandler implements Runnable {
     OutputEncoderService outputEncoderService = new OutputEncoderService();
     private final ConcurrentHashMap<String, ExpiryKey> keyMap = DataStore.getInstance().getKeyMap();
     private final ConcurrentHashMap<String, List<String>> listMap = DataStore.getInstance().getListMap();
-    private final ConcurrentHashMap<String, BlockingQueue<Thread>> clientWaiters = DataStore.getInstance().getClientWaiters();
-    private final ConcurrentHashMap<String, Entry> streamMap = DataStore.getInstance().getStreamMap();
+    private final ConcurrentHashMap<String, List<Entry>> streamMap = DataStore.getInstance().getStreamMap();
+    private final ConcurrentHashMap<String, LockAndCondition> listLocks = DataStore.getInstance().getListLocks();
 
     public ClientHandler(Socket clientSocket) {
         this.clientSocket = clientSocket;
     }
 
     private static final String nullRespString = "$-1\r\n";
-    private static final String nullRespArray = "*0\r\n";
+    private static final String EmptyRespArray = "*0\r\n";
+    private static final String nullRespArray = "*-1\r\n";
+
+    private LockAndCondition getLockAndCondition(String key) {
+        return listLocks.computeIfAbsent(key, k -> new LockAndCondition());
+    }
 
     public void run() {
         try (
@@ -82,40 +87,88 @@ public class ClientHandler implements Runnable {
                 return getValue(key);
             } else if ("RPUSH".equalsIgnoreCase(command)) {
                 String key = arguments.get(1);
-                for (int i = 2; i < arguments.size(); i++) {
-                    String value = arguments.get(i);
-                    appendRightToList(key, value);
+                int itemsPushed = arguments.size() - 2;
+                if (itemsPushed <= 0) {
+                    return outputEncoderService.encodeInteger(sizeOfList(key));
                 }
-                return outputEncoderService.encodeInteger(sizeOfList(key));
+
+                LockAndCondition lac = getLockAndCondition(key);
+                lac.getLock().lock();
+                try {
+                    for (int i = 2; i < arguments.size(); i++) {
+                        String value = arguments.get(i);
+                        appendRightToList(key, value);
+                    }
+                    for (int i = 0; i < itemsPushed; i++) {
+                        lac.getCondition().signal();
+                    }
+                    return outputEncoderService.encodeInteger(sizeOfList(key));
+                }
+                finally {
+                    lac.getLock().unlock();
+                }
             } else if ("LRANGE".equalsIgnoreCase(command)) {
                 String key = arguments.get(1);
-                Integer startIndex = Integer.parseInt(arguments.get(2));
-                Integer endIndex = Integer.parseInt(arguments.get(3));
-                return listElementsInRange(key, startIndex, endIndex);
+                ReentrantLock lock = getLockAndCondition(key).getLock();
+                lock.lock();
+                try {
+                    Integer startIndex = Integer.parseInt(arguments.get(2));
+                    Integer endIndex = Integer.parseInt(arguments.get(3));
+                    return listElementsInRange(key, startIndex, endIndex);
+                }
+                finally {
+                    lock.unlock();
+                }
             } else if ("LPUSH".equalsIgnoreCase(command)) {
                 String key = arguments.get(1);
-                for (int i = 2; i < arguments.size(); i++) {
-                    String value = arguments.get(i);
-                    appendLeftToList(key, value);
+                int itemsPushed = arguments.size() - 2;
+                if (itemsPushed <= 0) return outputEncoderService.encodeInteger(sizeOfList(key));
+
+                LockAndCondition lac = getLockAndCondition(key);
+                lac.getLock().lock();
+                try {
+                    for (int i = 2; i < arguments.size(); i++) {
+                        String value = arguments.get(i);
+                        appendLeftToList(key, value);
+                    }
+                    for (int i = 0; i < itemsPushed; i++) {
+                        lac.getCondition().signal();
+                    }
+                    return outputEncoderService.encodeInteger(sizeOfList(key));
                 }
-                return outputEncoderService.encodeInteger(sizeOfList(key));
+                finally {
+                    lac.getLock().unlock();
+                }
             } else if ("LLEN".equalsIgnoreCase(command)) {
                 String key = arguments.get(1);
-                return outputEncoderService.encodeInteger(sizeOfList(key));
+                ReentrantLock lock = getLockAndCondition(key).getLock();
+                lock.lock();
+                try {
+                    return outputEncoderService.encodeInteger(sizeOfList(key));
+                }
+                finally {
+                    lock.unlock();
+                }
             } else if ("LPOP".equalsIgnoreCase(command)) {
                 String key = arguments.get(1);
-                int len = 1;
-                if (arguments.size() < 3) {
-                    return outputEncoderService.encodeBulkString(removeElementFromLeft(key));
+                ReentrantLock lock = getLockAndCondition(key).getLock();
+                lock.lock();
+                try {
+                    if (arguments.size() < 3) {
+                        return outputEncoderService.encodeBulkString(removeElementFromLeft(key));
+                    }
+                    int count = Integer.parseInt(arguments.get(2));
+                    List<String> elements = new ArrayList<>();
+                    Integer sizeOfList = sizeOfList(key);
+                    for (int i = 0; i < Math.min(count, sizeOfList); i++) {
+                        String element = removeElementFromLeft(key);
+                        elements.add(element);
+                    }
+                    return outputEncoderService.encodeList(elements);
                 }
-                len = Integer.parseInt(arguments.get(2));
-                List<String> elements = new LinkedList<>();
-                Integer sizeOfList = sizeOfList(key);
-                for (int i = 0; i < Math.min(len, sizeOfList); i++) {
-                    String element = removeElementFromLeft(key);
-                    elements.addLast(element);
+                finally {
+                    lock.unlock();
                 }
-                return outputEncoderService.encodeList(elements);
             } else if ("BLPOP".equalsIgnoreCase(command)) {
                 String key = arguments.get(1);
                 Double timeout = Double.parseDouble(arguments.get(2));
@@ -130,8 +183,7 @@ public class ClientHandler implements Runnable {
                 for(int i = 3; i < arguments.size(); i+=2) {
                     keyValueMap.put(arguments.get(i), arguments.get(i+1));
                 }
-                streamMap.put(key, new Entry(id, keyValueMap));
-                return outputEncoderService.encodeBulkString(id);
+                return addEntry(key, id, keyValueMap);
             }
             else {
                 throw new RuntimeException("Command not found");
@@ -230,53 +282,59 @@ public class ClientHandler implements Runnable {
     public String listElementsInRange(String key, Integer startIndex, Integer endIndex) {
         List<String> list = listMap.get(key);
         if (list == null || list.isEmpty()) {
-            return nullRespArray;
+            return EmptyRespArray;
         }
-
         int len = list.size();
-        if (startIndex < 0)
-            startIndex += len;
-        if (endIndex < 0)
-            endIndex += len;
-        if (startIndex >= len) {
-            return nullRespArray;
-        } else if (startIndex > endIndex) {
-            return nullRespArray;
+        if (startIndex < 0) startIndex += len;
+        if (endIndex < 0) endIndex += len;
+
+        if (startIndex < 0) startIndex = 0;
+        if (startIndex >= len || startIndex > endIndex) {
+            return EmptyRespArray;
         }
-        List<String> subList = list.subList(Math.max(0, startIndex), Math.max(0, Math.min(len, endIndex + 1)));
+        endIndex = Math.min(endIndex, len - 1);
+
+        List<String> subList = new ArrayList<>();
+        for (int i = startIndex; i <= endIndex; i++) {
+            subList.add(list.get(i));
+        }
         return outputEncoderService.encodeList(subList);
     }
 
     private String removeBlockedElementFromLeft(String key, Double timeout) {
-        long start = System.currentTimeMillis();
-        long timeoutMilliSeconds = Math.round(timeout * 1000);
-        BlockingQueue<Thread> waiters = clientWaiters.computeIfAbsent(key, k -> new LinkedBlockingQueue<>());
-        waiters.add(Thread.currentThread());
-
-        while (true) {
-            List<String> elements = listMap.get(key);
-            if (elements != null && !elements.isEmpty()) {
-                waiters.remove(Thread.currentThread());
-                ArrayList<String> response = new ArrayList<>();
-                response.add(key);
-                response.add(removeElementFromLeft(key));
-                return outputEncoderService.encodeList(response);
-            }
-
-            long current = System.currentTimeMillis();
-            if (timeoutMilliSeconds != 0 && (current - start) > timeoutMilliSeconds) {
-                waiters.remove(Thread.currentThread());
-                return nullRespString;
-            }
-
+        LockAndCondition lac = getLockAndCondition(key);
+        try {
+            lac.getLock().lockInterruptibly();
             try {
-                Thread.sleep(1);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                waiters.remove(Thread.currentThread());
-                return nullRespString;
+                if (timeout == 0.0) {
+                    while (isListEmpty(key)) {
+                        lac.getCondition().await();
+                    }
+                } else {
+                    long timeoutNanos = Math.round(timeout * 1_000_000_000L);
+                    while (isListEmpty(key)) {
+                        if (timeoutNanos <= 0) {
+                            return nullRespArray;
+                        }
+                        timeoutNanos = lac.getCondition().awaitNanos(timeoutNanos);
+                    }
+                }
+                List<String> list = listMap.get(key);
+                String element = list.removeFirst();
+                List<String> response = Arrays.asList(key, element);
+                return outputEncoderService.encodeList(response);
+            } finally {
+                lac.getLock().unlock();
             }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return nullRespArray;
         }
+    }
+
+    private boolean isListEmpty(String key) {
+        List<String> list = listMap.get(key);
+        return list == null || list.isEmpty();
     }
 
     private String getType(String key) {
@@ -290,5 +348,30 @@ public class ClientHandler implements Runnable {
         else {
             return outputEncoderService.encodeSimpleString("none");
         }
+    }
+
+    private String addEntry(String key, String id, Map<String, String> keyValueMap) {
+        List<String> parts = List.of(id.split("-"));
+        Long milliseconds = Long.parseLong(parts.get(0));
+        Long sequenceNumber = Long.parseLong(parts.get(1));
+        if( milliseconds==0 && sequenceNumber==0) {
+            return outputEncoderService.encodeSimpleError("The ID specified in XADD must be greater than 0-0");
+        }
+        streamMap.computeIfAbsent(key, k -> new ArrayList<>());
+        if(!streamMap.get(key).isEmpty()) {
+            Entry lastEntry = streamMap.get(key).getLast();
+            Long previousMilliseconds = lastEntry.getMilliseconds();
+            Long previousSequenceNumber = lastEntry.getSequenceNumber();
+
+            if( milliseconds.compareTo(previousMilliseconds) < 0 ||
+                    (milliseconds.compareTo(previousMilliseconds) == 0
+                            && sequenceNumber.compareTo(previousSequenceNumber) <= 0)) {
+                return outputEncoderService.encodeSimpleError("The ID specified in XADD is equal or smaller " +
+                        "than the target stream top item");
+            }
+        }
+        Entry entry = new Entry(milliseconds, sequenceNumber, keyValueMap);
+        streamMap.get(key).add(entry);
+        return outputEncoderService.encodeBulkString(id);
     }
 }

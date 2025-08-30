@@ -4,16 +4,22 @@ import java.util.Map;
 
 public class Entry {
 
-    String id;
+    Long milliseconds;
+    Long sequenceNumber;
     Map<String, String> keyValueMap;
 
-    public Entry(String id, Map<String, String> keyValueMap) {
-        this.id = id;
+    public Entry(Long milliseconds, Long sequenceNumber, Map<String, String> keyValueMap) {
+        this.milliseconds = milliseconds;
+        this.sequenceNumber = sequenceNumber;
         this.keyValueMap = keyValueMap;
     }
 
-    public String getId() {
-        return id;
+    public Long getMilliseconds() {
+        return milliseconds;
+    }
+
+    public Long getSequenceNumber() {
+        return sequenceNumber;
     }
 
     public Map<String, String> getKeyValueMap() {

@@ -1,7 +1,6 @@
 package Models;
 
 import java.util.List;
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class DataStore {
@@ -9,14 +8,14 @@ public class DataStore {
     private static DataStore instance;
     private final ConcurrentHashMap<String, ExpiryKey> keyMap;
     private final  ConcurrentHashMap<String, List<String>> listMap;
-    private final ConcurrentHashMap<String, Entry> streamMap;
-    private final ConcurrentHashMap<String, BlockingQueue<Thread>> clientWaiters;
+    private final ConcurrentHashMap<String, List<Entry>> streamMap;
+    private final ConcurrentHashMap<String, LockAndCondition> listLocks;
 
     private DataStore() {
         keyMap = new ConcurrentHashMap<>();
         listMap = new ConcurrentHashMap<>();
         streamMap = new ConcurrentHashMap<>();
-        clientWaiters = new ConcurrentHashMap<>();
+        listLocks = new ConcurrentHashMap<>();
     }
 
     public static synchronized DataStore getInstance() {
@@ -34,11 +33,11 @@ public class DataStore {
         return listMap;
     }
 
-    public ConcurrentHashMap<String, Entry> getStreamMap() {
+    public ConcurrentHashMap<String, List<Entry>> getStreamMap() {
         return streamMap;
     }
 
-    public ConcurrentHashMap<String, BlockingQueue<Thread>> getClientWaiters() {
-        return clientWaiters;
+    public ConcurrentHashMap<String, LockAndCondition> getListLocks() {
+        return listLocks;
     }
 }
