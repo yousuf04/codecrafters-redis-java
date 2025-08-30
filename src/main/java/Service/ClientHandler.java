@@ -19,7 +19,7 @@ public class ClientHandler implements Runnable {
     Socket clientSocket;
     OutputEncoderService outputEncoderService = new OutputEncoderService();
     private final ConcurrentHashMap<String, ExpiryKey> keyMap = DataStore.getInstance().getKeyMap();
-    private final ConcurrentHashMap<String, List<String>> listMap = DataStore.getInstance().getListMap();
+    private final ConcurrentHashMap<String, LinkedList<String>> listMap = DataStore.getInstance().getListMap();
     private final ConcurrentHashMap<String, List<Entry>> streamMap = DataStore.getInstance().getStreamMap();
     private final ConcurrentHashMap<String, LockAndCondition> listLocks = DataStore.getInstance().getListLocks();
 

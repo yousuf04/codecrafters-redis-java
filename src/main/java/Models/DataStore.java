@@ -1,5 +1,6 @@
 package Models;
 
+import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -7,7 +8,7 @@ public class DataStore {
 
     private static DataStore instance;
     private final ConcurrentHashMap<String, ExpiryKey> keyMap;
-    private final  ConcurrentHashMap<String, List<String>> listMap;
+    private final  ConcurrentHashMap<String, LinkedList<String>> listMap;
     private final ConcurrentHashMap<String, List<Entry>> streamMap;
     private final ConcurrentHashMap<String, LockAndCondition> listLocks;
 
@@ -29,7 +30,7 @@ public class DataStore {
         return keyMap;
     }
 
-    public ConcurrentHashMap<String, List<String>> getListMap() {
+    public ConcurrentHashMap<String, LinkedList<String>> getListMap() {
         return listMap;
     }
 
