@@ -355,6 +355,7 @@ public class ClientHandler implements Runnable {
         Long milliseconds = Long.parseLong(parts.get(0));
         Long sequenceNumber;
         if(parts.get(1).equals("*")) {
+            streamMap.computeIfAbsent(key, k -> new ArrayList<>());
             if (!streamMap.get(key).isEmpty() &&
                     streamMap.get(key).getLast().getMilliseconds().compareTo(milliseconds) == 0) {
                 sequenceNumber = streamMap.get(key).getLast().getMilliseconds() + 1;
