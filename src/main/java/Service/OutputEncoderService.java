@@ -1,6 +1,7 @@
 package Service;
 
-import java.util.Arrays;
+import Models.Entry;
+
 import java.util.List;
 
 public class OutputEncoderService {
@@ -43,6 +44,27 @@ public class OutputEncoderService {
 
     public String encodeSimpleError(String errorMessage) {
         return "-ERR " + errorMessage + "\r\n";
+    }
+
+    public String encodeEntryList(List<Entry> entries) {
+        StringBuilder ans = new StringBuilder("*" + entries.size()+"\r\n");
+        for (Entry entry : entries) {
+            ans.append(encodeEntry(entry));
+        }
+        return ans.toString();
+    }
+
+    public String encodeEntry(Entry entry) {
+        StringBuilder ans = new StringBuilder("*" +"2\r\n");
+        ans.append(encodeBulkString(getId(entry.getMilliseconds(), entry.getSequenceNumber())));
+        ans.append("*").append(entry.getKeyValueMap().size()*2).append("\r\n");
+        entry.getKeyValueMap().forEach((key, value) ->
+                ans.append(encodeBulkString(key)).append(encodeBulkString(value)));
+        return ans.toString();
+    }
+
+    public String getId(Long milliseconds, Long sequenceNumber) {
+        return milliseconds.toString() + "-" + sequenceNumber.toString();
     }
 
 }

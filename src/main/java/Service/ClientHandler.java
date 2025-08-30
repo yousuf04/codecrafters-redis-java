@@ -192,6 +192,11 @@ public class ClientHandler implements Runnable {
                     keyValueMap.put(arguments.get(i), arguments.get(i+1));
                 }
                 return addEntry(key, id, keyValueMap);
+            } else if ("XRANGE".equalsIgnoreCase(command)) {
+                String key = arguments.get(1);
+                String startId = arguments.get(2);
+                String endId = arguments.get(3);
+                return entriesInRange(key, startId, endId);
             }
             else {
                 throw new RuntimeException("Command not found");
@@ -207,7 +212,6 @@ public class ClientHandler implements Runnable {
             numberOfArguments = numberOfArguments * 10 + (input[in] - '0');
             in++;
         }
-        System.out.println("The number of arguments sent are :" + numberOfArguments);
         in += 2;
         ArrayList<String> arguments = new ArrayList<>();
         for (int i = 0; i < numberOfArguments; i++) {
@@ -218,13 +222,11 @@ public class ClientHandler implements Runnable {
                 in++;
             }
             in += 2;
-            System.out.println("Argument " + i + " Length: " + argumentLength);
             StringBuilder argument = new StringBuilder();
             for (int j = 0; j < argumentLength; j++, in++) {
                 argument.append((char) input[in]);
             }
             in += 2;
-            System.out.println("Argument " + i + " : " + argument);
             arguments.add(argument.toString());
         }
         return arguments;
@@ -315,7 +317,7 @@ public class ClientHandler implements Runnable {
         try {
             lac.getLock().lockInterruptibly();
             try {
-                if (!isListEmpty(key)) {
+                if (!isListEmpty(key) && lac.getWaiters().isEmpty()) {
                     return encodeBlpopValue(key);
                 }
                 else {
@@ -325,7 +327,7 @@ public class ClientHandler implements Runnable {
 
                 long deadline = (timeout > 0) ? System.nanoTime() + (long)(timeout * 1_000_000_000L) : 0;
 
-                while(isListEmpty(key)) {
+                while(isListEmpty(key) && (!lac.getWaiters().isEmpty() || !lac.getWaiters().peek().equals(myCondition))) {
                     if (timeout == 0.0) {
                         myCondition.await();
                     } else {
@@ -446,5 +448,47 @@ public class ClientHandler implements Runnable {
         String element = list.removeFirst();
         List<String> response = Arrays.asList(key, element);
         return outputEncoderService.encodeList(response);
+    }
+
+    private String entriesInRange(String key, String startId, String endId) {
+
+        Long startMilliseconds;
+        Long startSequenceNumber;
+        if(startId.contains("-")) {
+            List<String> parts = Arrays.asList(startId.split("-"));
+            startMilliseconds = Long.parseLong(parts.getFirst());
+            startSequenceNumber = Long.parseLong(parts.getLast());
+        }
+        else {
+            startMilliseconds = Long.parseLong(startId);
+            startSequenceNumber = 0L;
+        }
+
+        Long endMilliseconds;
+        Long endSequenceNumber;
+        if(startId.contains("-")) {
+            List<String> parts = Arrays.asList(endId.split("-"));
+            endMilliseconds = Long.parseLong(parts.getFirst());
+            endSequenceNumber = Long.parseLong(parts.getLast());
+        }
+        else {
+            endMilliseconds = Long.parseLong(endId);
+            endSequenceNumber = Long.MAX_VALUE;
+        }
+
+        List<Entry> entries = new ArrayList<>();
+        for (Entry entry:streamMap.get(key)) {
+
+            Long milliseconds = entry.getMilliseconds();
+            Long sequenceNumber = entry.getSequenceNumber();
+
+            if(milliseconds.compareTo(startMilliseconds)>=0
+                    && sequenceNumber.compareTo(startSequenceNumber)>=0
+                    && milliseconds.compareTo(endMilliseconds) <=0
+                    && sequenceNumber.compareTo(endSequenceNumber) <=0) {
+                entries.add(entry);
+            }
+        }
+        return outputEncoderService.encodeEntryList(entries);
     }
 }
