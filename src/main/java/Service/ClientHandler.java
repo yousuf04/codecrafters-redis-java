@@ -543,7 +543,7 @@ public class ClientHandler implements Runnable {
 
     private String elementsAddedInTime(String time, String key, String startId) {
         String lastId = createId(key);
-        String lastId = incrementId(lastId);
+        lastId = incrementId(lastId);
         if(compare(lastId, startId) > 0) {
             startId = lastId;
         }
