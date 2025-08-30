@@ -46,8 +46,9 @@ public class ClientHandler implements Runnable {
                 int num = inputStream.read(input);
                 if (num < 1)
                     break;
-                System.out.println("Received input from client: " + new String(input));
-                String output = respond(input);
+                byte[] actual = Arrays.copyOf(input, num);
+                System.out.println("Received input from client: " + new String(actual));
+                String output = respond(actual);
                 System.out.println("Response being sent to client :" + output);
                 outputStream.write(output.getBytes());
             }
@@ -100,9 +101,10 @@ public class ClientHandler implements Runnable {
                         String value = arguments.get(i);
                         appendRightToList(key, value);
                     }
-                    for (int i = 0; i < itemsPushed; i++) {
-                        if(!lac.getWaiters().isEmpty()) {
-                            lac.getWaiters().remove().signal();
+                    for (int i = 0; i < itemsPushed && !lac.getWaiters().isEmpty(); i++) {
+                        Condition condition = lac.getWaiters().poll();
+                        if (condition != null) {
+                            condition.signal();
                         }
                     }
                     return outputEncoderService.encodeInteger(sizeOfList(key));
@@ -134,9 +136,10 @@ public class ClientHandler implements Runnable {
                         String value = arguments.get(i);
                         appendLeftToList(key, value);
                     }
-                    for (int i = 0; i < itemsPushed; i++) {
-                        if( !lac.getWaiters().isEmpty()) {
-                            lac.getWaiters().remove().signal();
+                    for (int i = 0; i < itemsPushed && !lac.getWaiters().isEmpty(); i++) {
+                        Condition condition = lac.getWaiters().poll();
+                        if (condition != null) {
+                            condition.signal();
                         }
                     }
                     return outputEncoderService.encodeInteger(sizeOfList(key));
@@ -308,41 +311,43 @@ public class ClientHandler implements Runnable {
 
     private String removeBlockedElementFromLeft(String key, Double timeout) {
         LockAndCondition lac = getLockAndCondition(key);
+        Condition myCondition = null;
         try {
             lac.getLock().lockInterruptibly();
             try {
                 if (!isListEmpty(key)) {
                     return encodeBlpopValue(key);
                 }
-                if (timeout > 0 && timeout * 1_000_000_000L < 1) {
-                    return nullRespArray;
-                }
-                Condition myCondition = lac.getLock().newCondition();
-                lac.getWaiters().add(myCondition);
 
-                boolean timedOut = false;
-                if (timeout == 0.0) {
-                    myCondition.await();
-                } else {
-                    long timeoutNanos = Math.round(timeout * 1_000_000_000L);
-                    if(myCondition.awaitNanos(timeoutNanos) <=0 ) {
-                        timedOut = true;
+                while(isListEmpty(key)) {
+
+                    if (myCondition == null) {
+                        myCondition = lac.getLock().newCondition();
+                        lac.getWaiters().add(myCondition);
+                    }
+                    if (timeout == 0.0) {
+                        myCondition.await();
+                    } else {
+                        long timeoutNanos = Math.round(timeout * 1_000_000_000L);
+                        if (myCondition.awaitNanos(timeoutNanos) <= 0) {
+                            lac.getWaiters().remove(myCondition);
+                            return nullRespArray;
+                        }
                     }
                 }
-
-                if (timedOut) {
-                    lac.getWaiters().remove(myCondition);
-                }
-                if (!isListEmpty(key)) {
-                    return encodeBlpopValue(key);
-                } else {
-                    return nullRespArray;
-                }
-
+                return encodeBlpopValue(key);
             } finally {
                 lac.getLock().unlock();
             }
         } catch (InterruptedException e) {
+            if (myCondition != null) {
+                lac.getLock().lock();
+                try {
+                    lac.getWaiters().remove(myCondition);
+                } finally {
+                    lac.getLock().unlock();
+                }
+            }
             Thread.currentThread().interrupt();
             return nullRespArray;
         }
