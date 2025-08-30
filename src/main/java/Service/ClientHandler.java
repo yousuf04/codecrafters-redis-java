@@ -327,7 +327,7 @@ public class ClientHandler implements Runnable {
 
                 long deadline = (timeout > 0) ? System.nanoTime() + (long)(timeout * 1_000_000_000L) : 0;
 
-                while(isListEmpty(key) && (!lac.getWaiters().isEmpty() || !lac.getWaiters().peek().equals(myCondition))) {
+                while(isListEmpty(key) && !lac.getWaiters().peek().equals(myCondition)) {
                     if (timeout == 0.0) {
                         myCondition.await();
                     } else {
@@ -451,7 +451,6 @@ public class ClientHandler implements Runnable {
     }
 
     private String entriesInRange(String key, String startId, String endId) {
-
         Long startMilliseconds;
         Long startSequenceNumber;
         if(startId.equals("-")) {
