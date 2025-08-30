@@ -358,7 +358,7 @@ public class ClientHandler implements Runnable {
             streamMap.computeIfAbsent(key, k -> new ArrayList<>());
             if (!streamMap.get(key).isEmpty() &&
                     streamMap.get(key).getLast().getMilliseconds().compareTo(milliseconds) == 0) {
-                sequenceNumber = streamMap.get(key).getLast().getMilliseconds() + 1;
+                sequenceNumber = streamMap.get(key).getLast().getSequenceNumber() + 1;
             }
             else {
                 if(milliseconds == 0) {
