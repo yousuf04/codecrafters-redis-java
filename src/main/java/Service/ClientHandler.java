@@ -100,8 +100,6 @@ public class ClientHandler implements Runnable {
                     for (int i = 2; i < arguments.size(); i++) {
                         String value = arguments.get(i);
                         appendRightToList(key, value);
-                    }
-                    for (int i = 0; i < itemsPushed && !lac.getWaiters().isEmpty(); i++) {
                         Condition condition = lac.getWaiters().poll();
                         if (condition != null) {
                             condition.signal();
@@ -318,20 +316,23 @@ public class ClientHandler implements Runnable {
                 if (!isListEmpty(key)) {
                     return encodeBlpopValue(key);
                 }
+                else {
+                    myCondition = lac.getLock().newCondition();
+                    lac.getWaiters().add(myCondition);
+                }
+
+                long deadline = (timeout > 0) ? System.nanoTime() + (long)(timeout * 1_000_000_000L) : 0;
 
                 while(isListEmpty(key)) {
-                    if (myCondition == null) {
-                        myCondition = lac.getLock().newCondition();
-                        lac.getWaiters().add(myCondition);
-                    }
                     if (timeout == 0.0) {
                         myCondition.await();
                     } else {
-                        long timeoutNanos = Math.round(timeout * 1_000_000_000L);
-                        if (myCondition.awaitNanos(timeoutNanos) <= 0) {
+                        long remainingNanos = deadline - System.nanoTime();
+                        if (remainingNanos<=0) {
                             lac.getWaiters().remove(myCondition);
                             return nullRespArray;
                         }
+                        myCondition.awaitNanos(remainingNanos);
                     }
                 }
                 return encodeBlpopValue(key);
