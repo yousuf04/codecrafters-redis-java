@@ -201,7 +201,7 @@ public class ClientHandler implements Runnable {
             else if ("XREAD".equalsIgnoreCase(command)) {
                 int numberOfKeys = (arguments.size() - 2)/2;
                 StringBuilder stringBuilder = new StringBuilder("*");
-                stringBuilder.append(numberOfKeys).append("/r/n");
+                stringBuilder.append(numberOfKeys).append("\r\n");
                 for(int i=0; i<numberOfKeys; i++) {
                     String key = arguments.get(i+2);
                     String startId = arguments.get(i + numberOfKeys +2);
