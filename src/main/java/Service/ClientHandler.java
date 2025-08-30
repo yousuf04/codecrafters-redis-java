@@ -543,10 +543,12 @@ public class ClientHandler implements Runnable {
 
     private String elementsAddedInTime(String time, String key, String startId) {
         String lastId = createId(key);
+        System.out.println("The last Id is :" + lastId);
         lastId = incrementId(lastId);
         if(compare(lastId, startId) > 0) {
             startId = lastId;
         }
+        System.out.println("The final start Id is :" + startId);
         try {
             Thread.sleep(Long.parseLong(time));
         }
