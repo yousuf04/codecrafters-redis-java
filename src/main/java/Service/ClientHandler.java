@@ -104,7 +104,7 @@ public class ClientHandler implements Runnable {
                     for (int i = 0; i < itemsPushed && !lac.getWaiters().isEmpty(); i++) {
                         Condition condition = lac.getWaiters().poll();
                         if (condition != null) {
-                            condition.signal();
+                            condition.signalAll();
                         }
                     }
                     return outputEncoderService.encodeInteger(sizeOfList(key));
@@ -139,7 +139,7 @@ public class ClientHandler implements Runnable {
                     for (int i = 0; i < itemsPushed && !lac.getWaiters().isEmpty(); i++) {
                         Condition condition = lac.getWaiters().poll();
                         if (condition != null) {
-                            condition.signal();
+                            condition.signalAll();
                         }
                     }
                     return outputEncoderService.encodeInteger(sizeOfList(key));
