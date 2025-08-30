@@ -198,6 +198,11 @@ public class ClientHandler implements Runnable {
                 String endId = arguments.get(3);
                 return entriesInRange(key, startId, endId);
             }
+            else if ("XREAD".equalsIgnoreCase(command)) {
+                String key = arguments.get(1);
+                String startId = arguments.get(2);
+                return entriesStartingFrom(key, startId);
+            }
             else {
                 throw new RuntimeException("Command not found");
             }
@@ -499,5 +504,27 @@ public class ClientHandler implements Runnable {
             }
         }
         return outputEncoderService.encodeEntryList(entries);
+    }
+
+    private String entriesStartingFrom(String key, String startId) {
+
+        List<String> parts = Arrays.asList(startId.split("-"));
+        Long startMilliseconds = Long.parseLong(parts.getFirst());
+        Long startSequenceNumber = Long.parseLong(parts.getLast());
+
+        List<Entry> entries = new ArrayList<>();
+        for (Entry entry:streamMap.get(key)) {
+
+            Long milliseconds = entry.getMilliseconds();
+            Long sequenceNumber = entry.getSequenceNumber();
+
+            if(milliseconds.compareTo(startMilliseconds)>=0
+                    && sequenceNumber.compareTo(startSequenceNumber)>=0) {
+                entries.add(entry);
+            }
+        }
+        return "*1\r\n" + "*2\r\n" +
+                outputEncoderService.encodeBulkString(key) +
+                outputEncoderService.encodeEntryList(entries);
     }
 }
