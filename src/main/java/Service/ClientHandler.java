@@ -548,7 +548,7 @@ public class ClientHandler implements Runnable {
         if(Long.parseLong(time) ==0) {
             while (true) {
                 for (int i = lastIndex; i < streamMap.get(key).size(); i++) {
-                    if (compare(streamMap.get(key).get(i).getId(), startId) > 0) {
+                    if ("$".equals(startId) || compare(streamMap.get(key).get(i).getId(), startId) > 0) {
                         entries.add(streamMap.get(key).get(i));
                         break;
                     }
@@ -571,7 +571,7 @@ public class ClientHandler implements Runnable {
                 throw new RuntimeException(e.getMessage());
             }
             for (int i = lastIndex; i < streamMap.get(key).size(); i++) {
-                if (compare(streamMap.get(key).get(i).getId(), startId) > 0) {
+                if ("$".equals(startId) || compare(streamMap.get(key).get(i).getId(), startId) > 0) {
                     entries.add(streamMap.get(key).get(i));
                     break;
                 }
