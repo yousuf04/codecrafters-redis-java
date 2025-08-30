@@ -195,6 +195,12 @@ public class ClientHandler implements Runnable {
                 return entriesInRange(key, startId, endId);
             }
             else if ("XREAD".equalsIgnoreCase(command)) {
+                if(arguments.get(1).equalsIgnoreCase("block")) {
+                    String time = arguments.get(2);
+                    String key = arguments.get(4);
+                    String startId = arguments.get(5);
+                    return elementsAddedInTime(time, key, startId);
+                }
                 int numberOfKeys = (arguments.size() - 2)/2;
                 StringBuilder stringBuilder = new StringBuilder("*");
                 stringBuilder.append(numberOfKeys).append("\r\n");
@@ -444,10 +450,15 @@ public class ClientHandler implements Runnable {
     }
 
     private String createId(String key) {
-        Entry lastEntry = streamMap.get(key).getLast();
-        Long milliseconds = lastEntry.getMilliseconds();
-        Long sequenceNumber = lastEntry.getSequenceNumber();
-        return milliseconds.toString()+"-"+sequenceNumber.toString();
+        if(!streamMap.get(key).isEmpty()) {
+            Entry lastEntry = streamMap.get(key).getLast();
+            Long milliseconds = lastEntry.getMilliseconds();
+            Long sequenceNumber = lastEntry.getSequenceNumber();
+            return milliseconds.toString() + "-" + sequenceNumber.toString();
+        }
+        else {
+            return "0-1";
+        }
     }
 
     private String encodeBlpopValue(String key) {
@@ -528,5 +539,17 @@ public class ClientHandler implements Runnable {
         return  "*2\r\n" +
                 outputEncoderService.encodeBulkString(key) +
                 outputEncoderService.encodeEntryList(entries);
+    }
+
+    private String elementsAddedInTime(String time, String key, String startId) {
+        startId = createId(key);
+        try {
+            Thread.sleep(Long.parseLong(time));
+        }
+        catch (Exception e) {
+            throw new RuntimeException(e.getMessage());
+        }
+        return "*1\r\n" +
+                entriesStartingFrom(key, startId);
     }
 }
