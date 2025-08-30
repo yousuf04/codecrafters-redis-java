@@ -100,6 +100,8 @@ public class ClientHandler implements Runnable {
                     for (int i = 2; i < arguments.size(); i++) {
                         String value = arguments.get(i);
                         appendRightToList(key, value);
+                    }
+                    for (int i = 0; i < itemsPushed && !lac.getWaiters().isEmpty(); i++) {
                         Condition condition = lac.getWaiters().poll();
                         if (condition != null) {
                             condition.signal();
