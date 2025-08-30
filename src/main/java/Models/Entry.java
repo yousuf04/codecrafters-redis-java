@@ -26,6 +26,10 @@ public class Entry {
         return keyValueMap;
     }
 
+    public String getId() {
+        return milliseconds + "-" + sequenceNumber;
+    }
+
     public void setKeyValueMap(Map<String, String> keyValueMap) {
         this.keyValueMap = keyValueMap;
     }

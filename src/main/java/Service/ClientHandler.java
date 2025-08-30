@@ -542,21 +542,29 @@ public class ClientHandler implements Runnable {
     }
 
     private String elementsAddedInTime(String time, String key, String startId) {
-        String lastId = createId(key);
-        System.out.println("The last Id is :" + lastId);
-        lastId = incrementId(lastId);
-        if(compare(lastId, startId) > 0) {
-            startId = lastId;
-        }
-        System.out.println("The final start Id is :" + startId);
+
+        int lastIndex = streamMap.get(key).size();
         try {
             Thread.sleep(Long.parseLong(time));
         }
         catch (Exception e) {
             throw new RuntimeException(e.getMessage());
         }
-        return "*1\r\n" +
-                entriesStartingFrom(key, startId);
+
+        List<Entry> entries = new ArrayList<>();
+
+        for(int i = lastIndex; i < streamMap.get(key).size(); i++) {
+
+            if(compare(streamMap.get(key).get(i).getId(), startId) >0) {
+                entries.add(streamMap.get(key).get(i));
+            }
+        }
+
+        if(entries.isEmpty()) {
+            return nullRespArray;
+        }
+        return "*1\r\n" + "*2\r\n" + outputEncoderService.encodeBulkString(key) +
+                outputEncoderService.encodeEntryList(entries);
     }
 
     private int compare(String id1, String id2) {
@@ -565,7 +573,7 @@ public class ClientHandler implements Runnable {
         Long milliseconds1 = Long.parseLong(parts1.getFirst());
         Long sequenceNumber1 = Long.parseLong(parts1.getLast());
 
-        List<String> parts2 = Arrays.asList(id1.split("-"));
+        List<String> parts2 = Arrays.asList(id2.split("-"));
         Long milliseconds2 = Long.parseLong(parts2.getFirst());
         Long sequenceNumber2 = Long.parseLong(parts2.getLast());
 
@@ -578,14 +586,5 @@ public class ClientHandler implements Runnable {
         else {
             return 0;
         }
-    }
-
-    private String incrementId(String id) {
-
-        List<String> parts = Arrays.asList(id.split("-"));
-        long milliseconds = Long.parseLong(parts.getFirst());
-        long sequenceNumber = Long.parseLong(parts.getLast()) + 1;
-
-        return milliseconds + "-" + sequenceNumber;
     }
 }
