@@ -338,7 +338,7 @@ public class ClientHandler implements Runnable {
 
                 long deadline = (timeout > 0) ? System.nanoTime() + (long)(timeout * 1_000_000_000L) : 0;
 
-                while(isListEmpty(key)) {
+                while(isListEmpty(key) || listLocks.get(key).getWaiters().contains(myCondition)) {
                     if (timeout == 0.0) {
                         myCondition.await();
                     } else {
