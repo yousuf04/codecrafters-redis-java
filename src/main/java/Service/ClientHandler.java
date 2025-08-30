@@ -308,35 +308,43 @@ public class ClientHandler implements Runnable {
 
     private String removeBlockedElementFromLeft(String key, Double timeout) {
         LockAndCondition lac = getLockAndCondition(key);
-        lac.getLock().lock();
         try {
-            if (!isListEmpty(key)) {
-                return encodeBlpopValue(key);
-            }
-            Condition myCondition = lac.getLock().newCondition();
-            lac.getWaiters().add(myCondition);
+            lac.getLock().lockInterruptibly();
             try {
+                if (!isListEmpty(key)) {
+                    return encodeBlpopValue(key);
+                }
+                if (timeout > 0 && timeout * 1_000_000_000L < 1) {
+                    return nullRespArray;
+                }
+                Condition myCondition = lac.getLock().newCondition();
+                lac.getWaiters().add(myCondition);
+
+                boolean timedOut = false;
                 if (timeout == 0.0) {
                     myCondition.await();
                 } else {
                     long timeoutNanos = Math.round(timeout * 1_000_000_000L);
-                    myCondition.awaitNanos(timeoutNanos);
+                    if(myCondition.awaitNanos(timeoutNanos) <=0 ) {
+                        timedOut = true;
+                    }
                 }
-            }
-            catch (Exception ex) {
-                lac.getWaiters().remove(myCondition);
-                Thread.currentThread().interrupt();
-                return nullRespArray;
-            }
-            if(!isListEmpty(key)) {
-                return encodeBlpopValue(key);
-            }
-            else {
-                return nullRespArray;
-            }
 
-        } finally {
-            lac.getLock().unlock();
+                if (timedOut) {
+                    lac.getWaiters().remove(myCondition);
+                }
+                if (!isListEmpty(key)) {
+                    return encodeBlpopValue(key);
+                } else {
+                    return nullRespArray;
+                }
+
+            } finally {
+                lac.getLock().unlock();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return nullRespArray;
         }
     }
 
