@@ -214,9 +214,13 @@ public class ClientHandler implements Runnable {
             else if ("INCR".equalsIgnoreCase(command)) {
                 String key = arguments.get(1);
                 ExpiryKey value = keyMap.computeIfAbsent(key, k -> new ExpiryKey("0", -1));
-                Integer newValue = Integer.parseInt(value.getValue()) + 1;
-                keyMap.get(key).setValue(newValue.toString());
-                return outputEncoderService.encodeInteger(Integer.parseInt(value.getValue()));
+                try {
+                    Integer newValue = Integer.parseInt(value.getValue()) + 1;
+                    keyMap.get(key).setValue(newValue.toString());
+                    return outputEncoderService.encodeInteger(Integer.parseInt(value.getValue()));
+                } catch (NumberFormatException ex) {
+                    return outputEncoderService.encodeSimpleError("value is not an integer or out of range");
+                }
             }
             else {
                 throw new RuntimeException("Command not found");
